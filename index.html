@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>社用車の記録</title>
+<style>
+  /* 車の中・日なたで片手で使う。外部の文字データは読まない（開く速さを優先）。
+     クラス名は q- で閉じる。vh は使わない（LINE WORKS から開かれても崩れないように）。 */
+  :root{
+    --navy:#14548D; --navy-deep:#0D3A63; --navy-tint:#E8EFF6; --line:#D3DCE5;
+    --ink:#15202B; --sub:#5B6875; --paper:#FFFFFF; --ground:#F2F5F8;
+    --ok:#1E7A46; --ok-tint:#E6F4EC; --ng:#B23A2C; --ng-tint:#FBEBE9;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--ground);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI","Meiryo",sans-serif;
+    -webkit-text-size-adjust:100%}
+  .q-wrap{max-width:520px;margin:0 auto;padding:16px 16px 40px;display:flex;flex-direction:column;gap:14px}
+  .q-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .q-car{font-size:26px;font-weight:800;line-height:1.2;color:var(--navy-deep);letter-spacing:.01em}
+  .q-app{font-size:12px;color:var(--sub);white-space:nowrap}
+  .q-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+  .q-lab{font-size:13px;font-weight:700;color:var(--sub);margin:0 0 8px;letter-spacing:.04em}
+  .q-book{font-size:15px;line-height:1.6}
+  .q-book b{font-size:17px}
+  .q-muted{color:var(--sub)}
+  .q-toggle{display:grid;grid-template-columns:1fr 1fr;gap:0;border:2px solid var(--navy);border-radius:12px;overflow:hidden}
+  .q-toggle button{appearance:none;border:0;background:var(--paper);color:var(--navy);font:inherit;font-size:18px;font-weight:800;padding:14px 0}
+  .q-toggle button.q-on{background:var(--navy);color:#fff}
+  .q-names{display:flex;flex-wrap:wrap;gap:8px}
+  .q-chip{appearance:none;font:inherit;font-size:16px;font-weight:700;padding:11px 14px;border-radius:999px;
+    border:2px solid var(--line);background:var(--paper);color:var(--ink)}
+  .q-chip.q-on{border-color:var(--navy);background:var(--navy-tint);color:var(--navy-deep)}
+  .q-chip.q-other{color:var(--sub);font-weight:600}
+  .q-search{width:100%;margin-top:10px;font:inherit;font-size:16px;padding:12px;border:2px solid var(--line);border-radius:10px}
+  .q-list{margin-top:8px;display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto}
+  .q-list button{appearance:none;text-align:left;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+  .q-meter{display:flex;align-items:center;gap:10px}
+  .q-meter input{flex:1;min-width:0;font:inherit;font-size:34px;font-weight:800;letter-spacing:.04em;padding:10px 14px;
+    border:2px solid var(--navy);border-radius:12px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .q-meter input::placeholder{color:#C3CCD5;font-weight:600}
+  .q-meter span{font-size:20px;font-weight:700;color:var(--sub)}
+  .q-hint{font-size:14px;color:var(--sub);margin-top:8px}
+  .q-go{appearance:none;border:0;border-radius:14px;background:var(--navy);color:#fff;font:inherit;font-size:20px;font-weight:800;padding:18px 0;width:100%}
+  .q-go:disabled{opacity:.5}
+  .q-msg{border-radius:12px;padding:14px 16px;font-size:16px;line-height:1.6;font-weight:600;white-space:pre-line}
+  .q-msg.q-ok{background:var(--ok-tint);color:var(--ok);border:1px solid #BFE0CC}
+  .q-msg.q-ng{background:var(--ng-tint);color:var(--ng);border:1px solid #EDC3BC}
+  .q-foot{font-size:12px;color:var(--sub);text-align:center}
+  button:focus-visible,input:focus-visible{outline:3px solid #7FB2E0;outline-offset:2px}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main class="q-wrap">
+  <div class="q-head">
+    <div class="q-car" id="car">社用車</div>
+    <div class="q-app">社用車の記録</div>
+  </div>
+
+  <section class="q-card" aria-live="polite">
+    <p class="q-lab">いまの予約</p>
+    <div class="q-book" id="book"><span class="q-muted">予約を確認しています…（そのまま入力できます）</span></div>
+  </section>
+
+  <div class="q-toggle" role="group" aria-label="出発か帰着か">
+    <button type="button" id="tDep" class="q-on">出発</button>
+    <button type="button" id="tRet">帰着</button>
+  </div>
+
+  <section class="q-card">
+    <p class="q-lab">入れる人</p>
+    <div class="q-names" id="names"></div>
+    <div id="otherBox" hidden>
+      <input class="q-search" id="search" type="search" placeholder="名前で探す（例: 田中）" autocomplete="off">
+      <div class="q-list" id="list"></div>
+    </div>
+  </section>
+
+  <section class="q-card">
+    <p class="q-lab">メーター</p>
+    <div class="q-meter">
+      <input id="odo" type="text" inputmode="numeric" pattern="[0-9,]*" autocomplete="off" enterkeyhint="done" placeholder="例 182640" aria-label="メーターの数字">
+      <span>km</span>
+    </div>
+    <div class="q-hint" id="hint"></div>
+  </section>
+
+  <button class="q-go" id="go" type="button">出発を記録する</button>
+  <div class="q-msg" id="msg" hidden></div>
+  <p class="q-foot">時刻は押したときの時刻で入ります。間違えたら入れ直せば上書きされます。</p>
+</main>
+
+<script>
+(function () {
+  var EXEC = 'https://script.google.com/macros/s/AKfycbzjvvc6iQ-6U2XxTzP3p5SFJbi07Yz9ucELBGhd-_7ODalNGjtxsbH_ZrCGYL5s77wH2g/exec';
+  var qs = new URLSearchParams(location.search);
+  var C = qs.get('c') || '', K = qs.get('k') || '', DEMO = qs.has('demo');
+  var $ = function (id) { return document.getElementById(id); };
+  var state = null, kind = 'depart', name = '', sending = false, staff = null;
+  try { name = localStorage.getItem('hq_name') || ''; } catch (e) { name = ''; }
+
+  function fmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function el(t, cls, txt) { var e = document.createElement(t); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  function say(ok, text) { var m = $('msg'); m.hidden = false; m.className = 'q-msg ' + (ok ? 'q-ok' : 'q-ng'); m.textContent = text; }
+
+  function setKind(k) {
+    kind = k;
+    $('tDep').className = k === 'depart' ? 'q-on' : '';
+    $('tRet').className = k === 'return' ? 'q-on' : '';
+    $('go').textContent = (k === 'depart' ? '出発' : '帰着') + 'を記録する';
+    hint();
+  }
+  function hint() {
+    var h = '';
+    if (state && state.booking && state.booking.odoStart != null && kind === 'return') h = '出発のとき ' + fmt(state.booking.odoStart) + 'km';
+    else if (state && state.prev != null) h = '前回の記録 ' + fmt(state.prev) + 'km';
+    $('hint').textContent = h;
+  }
+  function pick(n) {
+    name = n;
+    try { localStorage.setItem('hq_name', n); } catch (e) { /* ignore */ }
+    drawNames();
+  }
+  function drawNames() {
+    var box = $('names'); box.innerHTML = '';
+    var list = (state && state.booking && state.booking.drivers) ? state.booking.drivers.slice() : [];
+    if (name && list.indexOf(name) < 0) list.unshift(name);
+    list.forEach(function (n) {
+      var b = el('button', 'q-chip' + (n === name ? ' q-on' : ''), n);
+      b.type = 'button'; b.onclick = function () { pick(n); $('otherBox').hidden = true; };
+      box.appendChild(b);
+    });
+    var o = el('button', 'q-chip q-other', list.length ? 'ほかの人' : '名前を選ぶ');
+    o.type = 'button'; o.onclick = openOther; box.appendChild(o);
+  }
+  function openOther() {
+    $('otherBox').hidden = false; $('search').focus();
+    if (staff) return drawList();
+    $('list').textContent = '読み込み中…';
+    call('GET', { op: 'staff' }).then(function (r) { staff = (r && r.staff) || []; drawList(); })
+      .catch(function () { $('list').textContent = '読み込めませんでした。電波の良いところでもう一度。'; });
+  }
+  function drawList() {
+    var q = $('search').value.replace(/\s/g, ''), box = $('list'); box.innerHTML = '';
+    (staff || []).filter(function (n) { return !q || n.replace(/\s/g, '').indexOf(q) >= 0; }).slice(0, 30).forEach(function (n) {
+      var b = el('button', '', n); b.type = 'button';
+      b.onclick = function () { pick(n); $('otherBox').hidden = true; $('search').value = ''; };
+      box.appendChild(b);
+    });
+  }
+
+  function call(method, params) {
+    if (DEMO) return demo(method, params);
+    if (method === 'GET') {
+      // GAS では引数名 c が予約語（400 になる）。GAS には car / key で送る
+      var u = EXEC + '?page=qr&car=' + encodeURIComponent(C) + '&key=' + encodeURIComponent(K);
+      Object.keys(params).forEach(function (x) { u += '&' + x + '=' + encodeURIComponent(params[x]); });
+      return fetch(u, { redirect: 'follow' }).then(function (r) { return r.json(); });
+    }
+    return fetch(EXEC, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ qr: params }) })
+      .then(function (r) { return r.json(); });
+  }
+
+  function showState(s) {
+    state = s;
+    if (!s || !s.ok) { $('book').innerHTML = ''; $('book').appendChild(el('span', '', (s && s.error) || 'このQRは使えません。')); $('go').disabled = true; return; }
+    $('car').textContent = s.car.name;
+    document.title = s.car.name + '｜社用車の記録';
+    var box = $('book'); box.innerHTML = '';
+    if (s.booking) {
+      box.appendChild(el('b', '', s.booking.who + (s.booking.dest ? '（' + s.booking.dest + '）' : '')));
+      box.appendChild(el('div', 'q-muted', s.booking.when));
+    } else {
+      box.appendChild(el('b', '', '予約が見つかりません'));
+      box.appendChild(el('div', 'q-muted', 'このまま記録すると「予約なし」で入り、配車担当に知らせます。'));
+    }
+    if (s.kind === 'midtrip') box.appendChild(el('div', 'q-muted', '泊まりの途中です。帰着は最終日に入れてください。'));
+    setKind(s.kind === 'return' || s.kind === 'midtrip' ? 'return' : 'depart');
+    drawNames();
+  }
+
+  var loading = call('GET', { op: 'state' }).then(showState).catch(function () {
+    $('book').innerHTML = ''; $('book').appendChild(el('span', '', '予約を確認できませんでした（電波が弱いかもしれません）。入力はそのまま続けられます。'));
+    return null;
+  });
+
+  $('tDep').onclick = function () { setKind('depart'); };
+  $('tRet').onclick = function () { setKind('return'); };
+  $('search').oninput = drawList;
+  $('odo').oninput = function () { var v = this.value.replace(/[^0-9]/g, ''); this.value = v ? fmt(v) : ''; };
+
+  $('go').onclick = function () {
+    if (sending) return;
+    var odo = $('odo').value.replace(/[^0-9]/g, '');
+    if (!odo) { say(false, 'メーターの数字を入れてください。'); $('odo').focus(); return; }
+    if (!name) { say(false, '入れる人の名前を選んでください。'); return; }
+    sending = true; $('go').disabled = true; $('go').textContent = '送っています…'; $('msg').hidden = true;
+    // 予約の確認がまだ終わっていなければ、終わるのを待ってから送る（数秒）
+    loading.then(function () {
+      return call('POST', { car: C, key: K, kind: kind, odo: odo, name: name, bookingId: state && state.booking ? state.booking.id : '' });
+    }).then(function (r) {
+      if (r && r.ok) { say(true, '✅ ' + r.message + '\nこの画面は閉じて大丈夫です。'); $('go').textContent = '記録しました'; return; }
+      say(false, (r && r.error) || '記録できませんでした。もう一度押してください。');
+      sending = false; $('go').disabled = false; setKind(kind);
+    }).catch(function () {
+      say(false, '送れませんでした（電波が弱いかもしれません）。もう一度押してください。');
+      sending = false; $('go').disabled = false; setKind(kind);
+    });
+  };
+
+  // 見た目の確認用（?demo=1）。実際の記録はしない
+  function demo(method, params) {
+    return new Promise(function (res) {
+      setTimeout(function () {
+        if (method === 'GET' && params.op === 'staff') return res({ ok: true, staff: ['見本 一郎', '見本 二郎', '見本 花子', '見本 三郎'] });
+        if (method === 'GET') return res({ ok: true, car: { key: 'hiace_blue', name: 'ハイエース 青[16-38]' }, kind: 'depart', prev: 227150,
+          booking: { id: 1, when: '9/28(月) 8:00 〜 9/28(月) 17:00', who: '見本 一郎・見本 二郎', dest: '見本の行き先', drivers: ['見本 一郎', '見本 二郎'], odoStart: null } });
+        res({ ok: true, message: (params.kind === 'depart' ? '出発' : '帰着') + 'を記録しました（9/28(月) 8:02　' + fmt(params.odo) + 'km）' });
+      }, 1200);
+    });
+  }
+
+  drawNames();
+  setKind('depart');
+  if (!C || !K) { if (!DEMO) { $('book').textContent = 'QRコードから開いてください。'; $('go').disabled = true; } }
+})();
+</script>
+</body>
+</html>
