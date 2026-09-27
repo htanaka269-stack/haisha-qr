@@ -71,7 +71,7 @@
   </div>
 
   <section class="q-card">
-    <p class="q-lab">入れる人</p>
+    <p class="q-lab">入れる人（自分の名前をタップ）</p>
     <div class="q-names" id="names"></div>
     <div id="otherBox" hidden>
       <input class="q-search" id="search" type="search" placeholder="名前で探す（例: 田中）" autocomplete="off">
@@ -100,7 +100,9 @@
   var C = qs.get('c') || '', K = qs.get('k') || '', DEMO = qs.has('demo');
   var $ = function (id) { return document.getElementById(id); };
   var state = null, kind = 'depart', name = '', sending = false, staff = null;
-  try { name = localStorage.getItem('hq_name') || ''; } catch (e) { name = ''; }
+  var saved = '';
+  try { saved = localStorage.getItem('hq_name') || ''; } catch (e) { saved = ''; }
+  name = saved;
 
   function fmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
   function el(t, cls, txt) { var e = document.createElement(t); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
@@ -120,14 +122,16 @@
     $('hint').textContent = h;
   }
   function pick(n) {
-    name = n;
+    name = n; saved = n;
     try { localStorage.setItem('hq_name', n); } catch (e) { /* ignore */ }
     drawNames();
   }
+  // 予約の人を先に並べる（タップするだけ）。この端末で前に選んだ人は、予約の人なら最初から選んだ状態、そうでなければ後ろに置くだけ
   function drawNames() {
     var box = $('names'); box.innerHTML = '';
     var list = (state && state.booking && state.booking.drivers) ? state.booking.drivers.slice() : [];
-    if (name && list.indexOf(name) < 0) list.unshift(name);
+    if (saved && list.indexOf(saved) < 0) list.push(saved);
+    if (name && list.indexOf(name) < 0) list.push(name);
     list.forEach(function (n) {
       var b = el('button', 'q-chip' + (n === name ? ' q-on' : ''), n);
       b.type = 'button'; b.onclick = function () { pick(n); $('otherBox').hidden = true; };
@@ -179,6 +183,8 @@
     }
     if (s.kind === 'midtrip') box.appendChild(el('div', 'q-muted', '泊まりの途中です。帰着は最終日に入れてください。'));
     setKind(s.kind === 'return' || s.kind === 'midtrip' ? 'return' : 'depart');
+    var ppl = (s.booking && s.booking.drivers) || [];
+    if (ppl.length && name === saved && ppl.indexOf(name) < 0) name = ''; // 予約に無い人を勝手に選んだままにしない
     drawNames();
   }
 
