@@ -79,6 +79,12 @@
     </div>
   </section>
 
+  <section class="q-card" id="destCard" hidden>
+    <p class="q-lab">行き先（予約が無いので教えてください）</p>
+    <div class="q-names" id="dests"></div>
+    <input class="q-search" id="destOther" type="text" placeholder="ほかの行き先を書く" autocomplete="off" hidden>
+  </section>
+
   <section class="q-card">
     <p class="q-lab">メーター</p>
     <div class="q-meter">
@@ -99,7 +105,7 @@
   var qs = new URLSearchParams(location.search);
   var C = qs.get('c') || '', K = qs.get('k') || '', DEMO = qs.has('demo');
   var $ = function (id) { return document.getElementById(id); };
-  var state = null, kind = 'depart', name = '', sending = false, staff = null;
+  var state = null, kind = 'depart', name = '', sending = false, staff = null, dest = '';
   var saved = '';
   try { saved = localStorage.getItem('hq_name') || ''; } catch (e) { saved = ''; }
   name = saved;
@@ -113,6 +119,7 @@
     $('tDep').className = k === 'depart' ? 'q-on' : '';
     $('tRet').className = k === 'return' ? 'q-on' : '';
     $('go').textContent = (k === 'depart' ? '出発' : '帰着') + 'を記録する';
+    if (state) drawDests(state);
     hint();
   }
   function hint() {
@@ -140,6 +147,24 @@
     var o = el('button', 'q-chip q-other', list.length ? 'ほかの人' : '名前を選ぶ');
     o.type = 'button'; o.onclick = openOther; box.appendChild(o);
   }
+  // 予約が無いとき（軽トラなど）は行き先を聞く。よく行く先をボタンで、無ければ自由に書く
+  function drawDests(s) {
+    var show = !s.booking && kind === 'depart';
+    $('destCard').hidden = !show;
+    if (!show) return;
+    var box = $('dests'); box.innerHTML = '';
+    ((s && s.dests) || []).forEach(function (d) {
+      var b = el('button', 'q-chip' + (d === dest ? ' q-on' : ''), d);
+      b.type = 'button';
+      b.onclick = function () { dest = d; $('destOther').hidden = true; $('destOther').value = ''; drawDests(state); };
+      box.appendChild(b);
+    });
+    var o = el('button', 'q-chip q-other', 'そのほか');
+    o.type = 'button';
+    o.onclick = function () { dest = ''; $('destOther').hidden = false; $('destOther').focus(); drawDests(state); };
+    box.appendChild(o);
+  }
+
   function openOther() {
     $('otherBox').hidden = false; $('search').focus();
     if (staff) return drawList();
@@ -178,11 +203,14 @@
       box.appendChild(el('b', '', s.booking.who + (s.booking.dest ? '（' + s.booking.dest + '）' : '')));
       box.appendChild(el('div', 'q-muted', s.booking.when));
     } else {
-      box.appendChild(el('b', '', '予約が見つかりません'));
-      box.appendChild(el('div', 'q-muted', 'このまま記録すると「予約なし」で入り、配車担当に知らせます。'));
+      box.appendChild(el('b', '', s.noBookingOk ? '予約は要りません' : '予約が見つかりません'));
+      box.appendChild(el('div', 'q-muted', s.noBookingOk
+        ? 'この車は予約なしで使います。行き先だけ教えてください。'
+        : 'このまま記録すると「予約なし」で入り、配車担当に知らせます。'));
     }
     if (s.kind === 'midtrip') box.appendChild(el('div', 'q-muted', '泊まりの途中です。帰着は最終日に入れてください。'));
     setKind(s.kind === 'return' || s.kind === 'midtrip' ? 'return' : 'depart');
+    drawDests(s);
     var ppl = (s.booking && s.booking.drivers) || [];
     if (ppl.length && name === saved && ppl.indexOf(name) < 0) name = ''; // 予約に無い人を勝手に選んだままにしない
     drawNames();
@@ -206,7 +234,8 @@
     sending = true; $('go').disabled = true; $('go').textContent = '送っています…'; $('msg').hidden = true;
     // 予約の確認がまだ終わっていなければ、終わるのを待ってから送る（数秒）
     loading.then(function () {
-      return call('POST', { car: C, key: K, kind: kind, odo: odo, name: name, bookingId: state && state.booking ? state.booking.id : '' });
+      var d = ($('destOther').value || dest || '').trim();
+      return call('POST', { car: C, key: K, kind: kind, odo: odo, name: name, dest: d, bookingId: state && state.booking ? state.booking.id : '' });
     }).then(function (r) {
       if (r && r.ok) { say(true, '✅ ' + r.message + '\nこの画面は閉じて大丈夫です。'); $('go').textContent = '記録しました'; return; }
       say(false, (r && r.error) || '記録できませんでした。もう一度押してください。');
@@ -222,6 +251,7 @@
     return new Promise(function (res) {
       setTimeout(function () {
         if (method === 'GET' && params.op === 'staff') return res({ ok: true, staff: ['見本 一郎', '見本 二郎', '見本 花子', '見本 三郎'] });
+        if (method === 'GET' && params.op === 'state' && location.search.indexOf('nob') >= 0) return res({ ok: true, car: { key: 'kei_9948', name: '軽トラ [99-48]' }, kind: 'depart', prev: 45200, noBookingOk: true, dests: ['吉田倉庫', '大井川小径木', '櫻井', '吉田事務所'] });
         if (method === 'GET') return res({ ok: true, car: { key: 'hiace_blue', name: 'ハイエース 青[16-38]' }, kind: 'depart', prev: 227150,
           booking: { id: 1, when: '9/28(月) 8:00 〜 9/28(月) 17:00', who: '見本 一郎・見本 二郎', dest: '見本の行き先', drivers: ['見本 一郎', '見本 二郎'], odoStart: null } });
         res({ ok: true, message: (params.kind === 'depart' ? '出発' : '帰着') + 'を記録しました（9/28(月) 8:02　' + fmt(params.odo) + 'km）' });
