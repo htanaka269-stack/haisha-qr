@@ -106,6 +106,7 @@
   var C = qs.get('c') || '', K = qs.get('k') || '', DEMO = qs.has('demo');
   var $ = function (id) { return document.getElementById(id); };
   var state = null, kind = 'depart', name = '', sending = false, staff = null, dest = '';
+  var mode = 'normal'; // 'trip' = 泊まりの出張の途中（「今日の終わり」と「帰着」を選ぶ）
   var saved = '';
   try { saved = localStorage.getItem('hq_name') || ''; } catch (e) { saved = ''; }
   name = saved;
@@ -116,15 +117,19 @@
 
   function setKind(k) {
     kind = k;
-    $('tDep').className = k === 'depart' ? 'q-on' : '';
+    var trip = mode === 'trip';
+    $('tDep').textContent = trip ? '今日の終わり' : '出発';
+    $('tRet').textContent = trip ? '帰着（最後）' : '帰着';
+    $('tDep').className = (k === 'depart' || k === 'dayend') ? 'q-on' : '';
     $('tRet').className = k === 'return' ? 'q-on' : '';
-    $('go').textContent = (k === 'depart' ? '出発' : '帰着') + 'を記録する';
+    $('go').textContent = (k === 'depart' ? '出発' : k === 'dayend' ? '今日の終わり' : '帰着') + 'を記録する';
     if (state) drawDests(state);
     hint();
   }
   function hint() {
     var h = '';
-    if (state && state.booking && state.booking.odoStart != null && kind === 'return') h = '出発のとき ' + fmt(state.booking.odoStart) + 'km';
+    if (kind === 'dayend' && state && state.day && state.day.start != null) h = '今日のはじめ ' + fmt(state.day.start) + 'km';
+    else if (state && state.booking && state.booking.odoStart != null && kind === 'return') h = '出発のとき ' + fmt(state.booking.odoStart) + 'km';
     else if (state && state.prev != null) h = '前回の記録 ' + fmt(state.prev) + 'km';
     $('hint').textContent = h;
   }
@@ -208,8 +213,18 @@
         ? 'この車は予約なしで使います。行き先だけ教えてください。'
         : 'このまま記録すると「予約なし」で入り、配車担当に知らせます。'));
     }
-    if (s.kind === 'midtrip') box.appendChild(el('div', 'q-muted', '泊まりの途中です。帰着は最終日に入れてください。'));
-    setKind(s.kind === 'return' || s.kind === 'midtrip' ? 'return' : 'depart');
+    // 泊まりの出張の途中: 毎日の運転の終わりに「今日の終わり」、最終日に「帰着」（2026-10-02 鈴木課長のご意見）
+    mode = s.kind === 'midtrip' ? 'trip' : 'normal';
+    if (mode === 'trip') {
+      var dd = s.day || {};
+      box.appendChild(el('div', 'q-muted', '泊まりの出張の途中です' + (dd.last ? '（最終日 ' + dd.last + '）' : '') + '。'));
+      box.appendChild(el('div', 'q-muted', dd.done
+        ? '今日の記録は済んでいます（' + fmt(dd.odoEnd) + 'km）。直すときは、もう一度入れてください。'
+        : '今日の運転を終えたら（宿に着いたら）、メーターを入れてください。'));
+      setKind('dayend');
+    } else {
+      setKind(s.kind === 'return' ? 'return' : 'depart');
+    }
     drawDests(s);
     var ppl = (s.booking && s.booking.drivers) || [];
     if (ppl.length && name === saved && ppl.indexOf(name) < 0) name = ''; // 予約に無い人を勝手に選んだままにしない
@@ -221,7 +236,7 @@
     return null;
   });
 
-  $('tDep').onclick = function () { setKind('depart'); };
+  $('tDep').onclick = function () { setKind(mode === 'trip' ? 'dayend' : 'depart'); };
   $('tRet').onclick = function () { setKind('return'); };
   $('search').oninput = drawList;
   $('odo').oninput = function () { var v = this.value.replace(/[^0-9]/g, ''); this.value = v ? fmt(v) : ''; };
@@ -251,6 +266,9 @@
     return new Promise(function (res) {
       setTimeout(function () {
         if (method === 'GET' && params.op === 'staff') return res({ ok: true, staff: ['見本 一郎', '見本 二郎', '見本 花子', '見本 三郎'] });
+        if (method === 'GET' && params.op === 'state' && location.search.indexOf('trip') >= 0) return res({ ok: true, car: { key: 'hiace_white', name: 'ハイエース 白[ 2-77]' }, kind: 'midtrip', prev: 236790,
+          booking: { id: 75, when: '9/30(水) 15:00 〜 10/2(金) 18:30', who: '見本 一郎', dest: '見本の行き先', drivers: ['見本 一郎'], odoStart: 236790 },
+          day: { date: '2026-10-01', label: '10/1(木)', start: 236790, done: false, odoEnd: null, last: '10/2(金)', lastTomorrow: true } });
         if (method === 'GET' && params.op === 'state' && location.search.indexOf('nob') >= 0) return res({ ok: true, car: { key: 'kei_9948', name: '軽トラ [99-48]' }, kind: 'depart', prev: 45200, noBookingOk: true, dests: ['吉田倉庫', '大井川小径木', '櫻井', '吉田事務所'] });
         if (method === 'GET') return res({ ok: true, car: { key: 'hiace_blue', name: 'ハイエース 青[16-38]' }, kind: 'depart', prev: 227150,
           booking: { id: 1, when: '9/28(月) 8:00 〜 9/28(月) 17:00', who: '見本 一郎・見本 二郎', dest: '見本の行き先', drivers: ['見本 一郎', '見本 二郎'], odoStart: null } });
