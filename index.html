@@ -50,6 +50,8 @@
   .q-msg.q-ng{background:var(--ng-tint);color:var(--ng);border:1px solid #EDC3BC}
   .q-foot{font-size:12px;color:var(--sub);text-align:center}
   button:focus-visible,input:focus-visible{outline:3px solid #7FB2E0;outline-offset:2px}
+  #aNo.q-on{background:var(--ok);color:#fff}
+  #aYes.q-on{background:var(--ng);color:#fff}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -70,6 +72,14 @@
     <button type="button" id="tRet">帰着</button>
   </div>
 
+  <section class="q-card" id="alcCard">
+    <p class="q-lab">出発の前に：お酒は飲んでいませんか？</p>
+    <div class="q-toggle" role="group" aria-label="飲酒の確認">
+      <button type="button" id="aNo">飲んでいません</button>
+      <button type="button" id="aYes" class="q-yes">飲みました</button>
+    </div>
+  </section>
+
   <section class="q-card">
     <p class="q-lab">入れる人（自分の名前をタップ）</p>
     <div class="q-names" id="names"></div>
@@ -85,7 +95,7 @@
     <input class="q-search" id="destOther" type="text" placeholder="ほかの行き先を書く" autocomplete="off" hidden>
   </section>
 
-  <section class="q-card">
+  <section class="q-card" id="meterCard">
     <p class="q-lab">メーター</p>
     <div class="q-meter">
       <input id="odo" type="text" inputmode="numeric" pattern="[0-9,]*" autocomplete="off" enterkeyhint="done" placeholder="例 182640" aria-label="メーターの数字">
@@ -105,7 +115,7 @@
   var qs = new URLSearchParams(location.search);
   var C = qs.get('c') || '', K = qs.get('k') || '', DEMO = qs.has('demo');
   var $ = function (id) { return document.getElementById(id); };
-  var state = null, kind = 'depart', name = '', sending = false, staff = null, dest = '';
+  var state = null, kind = 'depart', name = '', sending = false, staff = null, dest = '', alc = '';
   var mode = 'normal'; // 'trip' = 泊まりの出張の途中（「今日の終わり」と「帰着」を選ぶ）
   var saved = '';
   try { saved = localStorage.getItem('hq_name') || ''; } catch (e) { saved = ''; }
@@ -122,10 +132,20 @@
     $('tRet').textContent = trip ? '帰着（最後）' : '帰着';
     $('tDep').className = (k === 'depart' || k === 'dayend') ? 'q-on' : '';
     $('tRet').className = k === 'return' ? 'q-on' : '';
-    $('go').textContent = (k === 'depart' ? '出発' : k === 'dayend' ? '今日の終わり' : '帰着') + 'を記録する';
+    $('alcCard').hidden = (k !== 'depart'); // 酒気確認は出発のときだけ（案B 2026-10-03）
+    syncGo();
     if (state) drawDests(state);
     hint();
   }
+  // 酒気確認（飲んでいません／飲みました）。飲みましたのときはメーターは要らない
+  function drawAlc() { $('aNo').className = alc === 'ok' ? 'q-on' : ''; $('aYes').className = 'q-yes' + (alc === 'ng' ? ' q-on' : ''); }
+  function syncGo() {
+    var drank = (kind === 'depart' && alc === 'ng');
+    $('meterCard').hidden = drank;
+    $('go').textContent = drank ? '飲酒を申告する（運転しません）'
+      : (kind === 'depart' ? '出発' : kind === 'dayend' ? '今日の終わり' : '帰着') + 'を記録する';
+  }
+  function setAlc(v) { alc = v; drawAlc(); syncGo(); }
   function hint() {
     var h = '';
     if (kind === 'dayend' && state && state.day && state.day.start != null) h = '今日のはじめ ' + fmt(state.day.start) + 'km';
@@ -238,19 +258,23 @@
 
   $('tDep').onclick = function () { setKind(mode === 'trip' ? 'dayend' : 'depart'); };
   $('tRet').onclick = function () { setKind('return'); };
+  $('aNo').onclick = function () { setAlc('ok'); };
+  $('aYes').onclick = function () { setAlc('ng'); };
   $('search').oninput = drawList;
   $('odo').oninput = function () { var v = this.value.replace(/[^0-9]/g, ''); this.value = v ? fmt(v) : ''; };
 
   $('go').onclick = function () {
     if (sending) return;
-    var odo = $('odo').value.replace(/[^0-9]/g, '');
-    if (!odo) { say(false, 'メーターの数字を入れてください。'); $('odo').focus(); return; }
+    var drank = (kind === 'depart' && alc === 'ng');
+    if (kind === 'depart' && !alc) { say(false, '出発の前の確認（お酒）を選んでください。'); return; }
     if (!name) { say(false, '入れる人の名前を選んでください。'); return; }
+    var odo = $('odo').value.replace(/[^0-9]/g, '');
+    if (!drank && !odo) { say(false, 'メーターの数字を入れてください。'); $('odo').focus(); return; }
     sending = true; $('go').disabled = true; $('go').textContent = '送っています…'; $('msg').hidden = true;
     // 予約の確認がまだ終わっていなければ、終わるのを待ってから送る（数秒）
     loading.then(function () {
       var d = ($('destOther').value || dest || '').trim();
-      return call('POST', { car: C, key: K, kind: kind, odo: odo, name: name, dest: d, bookingId: state && state.booking ? state.booking.id : '' });
+      return call('POST', { car: C, key: K, kind: kind, odo: drank ? '' : odo, name: name, dest: d, alc: kind === 'depart' ? alc : '', bookingId: state && state.booking ? state.booking.id : '' });
     }).then(function (r) {
       if (r && r.ok) { say(true, '✅ ' + r.message + '\nこの画面は閉じて大丈夫です。'); $('go').textContent = '記録しました'; return; }
       say(false, (r && r.error) || '記録できませんでした。もう一度押してください。');
@@ -272,6 +296,7 @@
         if (method === 'GET' && params.op === 'state' && location.search.indexOf('nob') >= 0) return res({ ok: true, car: { key: 'kei_9948', name: '軽トラ [99-48]' }, kind: 'depart', prev: 45200, noBookingOk: true, dests: ['吉田倉庫', '大井川小径木', '櫻井', '吉田事務所'] });
         if (method === 'GET') return res({ ok: true, car: { key: 'hiace_blue', name: 'ハイエース 青[16-38]' }, kind: 'depart', prev: 227150,
           booking: { id: 1, when: '9/28(月) 8:00 〜 9/28(月) 17:00', who: '見本 一郎・見本 二郎', dest: '見本の行き先', drivers: ['見本 一郎', '見本 二郎'], odoStart: null } });
+        if (params.kind === 'depart' && params.alc === 'ng') return res({ ok: true, kind: 'alcohol', message: 'わかりました。運転を交代してください。\n三浦 さんに知らせました。\nお酒が抜けてから、交代の方がこのQRで「出発」を入れてください。' });
         res({ ok: true, message: (params.kind === 'depart' ? '出発' : '帰着') + 'を記録しました（9/28(月) 8:02　' + fmt(params.odo) + 'km）' });
       }, 1200);
     });
