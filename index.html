@@ -26,8 +26,8 @@
   .q-book{font-size:15px;line-height:1.6}
   .q-book b{font-size:17px}
   .q-muted{color:var(--sub)}
-  .q-toggle{display:grid;grid-template-columns:1fr 1fr;gap:0;border:2px solid var(--navy);border-radius:12px;overflow:hidden}
-  .q-toggle button{appearance:none;border:0;background:var(--paper);color:var(--navy);font:inherit;font-size:18px;font-weight:800;padding:14px 0}
+  .q-toggle{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;border:2px solid var(--navy);border-radius:12px;overflow:hidden}
+  .q-toggle button{appearance:none;border:0;background:var(--paper);color:var(--navy);font:inherit;font-size:18px;font-weight:800;padding:14px 8px;line-height:1.3}
   .q-toggle button.q-on{background:var(--navy);color:#fff}
   .q-names{display:flex;flex-wrap:wrap;gap:8px}
   .q-chip{appearance:none;font:inherit;font-size:16px;font-weight:700;padding:11px 14px;border-radius:999px;
@@ -43,7 +43,7 @@
   .q-meter input::placeholder{color:#C3CCD5;font-weight:600}
   .q-meter span{font-size:20px;font-weight:700;color:var(--sub)}
   .q-hint{font-size:14px;color:var(--sub);margin-top:8px}
-  .q-go{appearance:none;border:0;border-radius:14px;background:var(--navy);color:#fff;font:inherit;font-size:20px;font-weight:800;padding:18px 0;width:100%}
+  .q-go{appearance:none;border:0;border-radius:14px;background:var(--navy);color:#fff;font:inherit;font-size:20px;font-weight:800;padding:18px 12px;width:100%;line-height:1.35}
   .q-go:disabled{opacity:.5}
   .q-msg{border-radius:12px;padding:14px 16px;font-size:16px;line-height:1.6;font-weight:600;white-space:pre-line}
   .q-msg.q-ok{background:var(--ok-tint);color:var(--ok);border:1px solid #BFE0CC}
@@ -128,8 +128,8 @@
   function setKind(k) {
     kind = k;
     var trip = mode === 'trip';
-    $('tDep').textContent = trip ? '今日の終わり' : '出発';
-    $('tRet').textContent = trip ? '帰着（最後）' : '帰着';
+    $('tDep').textContent = trip ? '🏨 宿・出張先で今日を終えた' : '出発';
+    $('tRet').textContent = trip ? '🏢 会社に戻った（返す）' : '帰着';
     $('tDep').className = (k === 'depart' || k === 'dayend') ? 'q-on' : '';
     $('tRet').className = k === 'return' ? 'q-on' : '';
     $('alcCard').hidden = (k !== 'depart'); // 酒気確認は出発のときだけ（案B 2026-10-03）
@@ -142,8 +142,8 @@
   function syncGo() {
     var drank = (kind === 'depart' && alc === 'ng');
     $('meterCard').hidden = drank;
-    $('go').textContent = drank ? '飲酒を申告する（運転しません）'
-      : (kind === 'depart' ? '出発' : kind === 'dayend' ? '今日の終わり' : '帰着') + 'を記録する';
+    $('go').textContent = !kind ? '上で「宿」か「会社」を選んでください' : drank ? '飲酒を申告する（運転しません）'
+      : (kind === 'depart' ? '出発' : kind === 'dayend' ? '今日の終わり' : mode === 'trip' ? '会社に戻った（帰着）' : '帰着') + 'を記録する';
   }
   function setAlc(v) { alc = v; drawAlc(); syncGo(); }
   function hint() {
@@ -157,6 +157,18 @@
     name = n; saved = n;
     try { localStorage.setItem('hq_name', n); } catch (e) { /* ignore */ }
     drawNames();
+    applyMode();
+  }
+  // 泊まりの出張の途中でも、その出張の乗る人ではない人が選ばれたら「出発」にする（車は会社に戻っていた。2026-10-13）
+  function applyMode() {
+    if (!state || state.kind !== 'midtrip') return;
+    var ppl = (state.booking && state.booking.drivers) || [];
+    var other = Boolean(name && ppl.length && ppl.indexOf(name) < 0);
+    var want = other ? 'normal' : 'trip';
+    if (want === mode) return;
+    mode = want;
+    $('tripNote').hidden = !other;
+    setKind(other ? 'depart' : '');
   }
   // 予約の人を先に並べる（タップするだけ）。この端末で前に選んだ人は、予約の人なら最初から選んだ状態、そうでなければ後ろに置くだけ
   function drawNames() {
@@ -240,8 +252,11 @@
       box.appendChild(el('div', 'q-muted', '泊まりの出張の途中です' + (dd.last ? '（最終日 ' + dd.last + '）' : '') + '。'));
       box.appendChild(el('div', 'q-muted', dd.done
         ? '今日の記録は済んでいます（' + fmt(dd.odoEnd) + 'km）。直すときは、もう一度入れてください。'
-        : '今日の運転を終えたら（宿に着いたら）、メーターを入れてください。'));
-      setKind('dayend');
+        : '今日の運転を終えたら、宿・出張先か、会社に戻ったかを選んでメーターを入れてください。'));
+      box.appendChild(el('div', 'q-muted', '予定より早く会社に戻ったときも「会社に戻った」を押してください。残りの日の予約が空きます。'));
+      var tn = el('div', 'q-muted', '出張中の車ですが、出張の人ではないので「出発」で入れます。出張は会社に戻っていたものとして締めます。');
+      tn.id = 'tripNote'; tn.hidden = true; box.appendChild(tn);
+      setKind('');
     } else {
       setKind(s.kind === 'return' ? 'return' : 'depart');
     }
@@ -249,6 +264,7 @@
     var ppl = (s.booking && s.booking.drivers) || [];
     if (ppl.length && name === saved && ppl.indexOf(name) < 0) name = ''; // 予約に無い人を勝手に選んだままにしない
     drawNames();
+    applyMode();
   }
 
   var loading = call('GET', { op: 'state' }).then(showState).catch(function () {
@@ -266,6 +282,7 @@
   $('go').onclick = function () {
     if (sending) return;
     var drank = (kind === 'depart' && alc === 'ng');
+    if (!kind) { say(false, '宿・出張先で今日を終えたのか、会社に戻ったのかを選んでください。'); return; }
     if (kind === 'depart' && !alc) { say(false, '出発の前の確認（お酒）を選んでください。'); return; }
     if (!name) { say(false, '入れる人の名前を選んでください。'); return; }
     var odo = $('odo').value.replace(/[^0-9]/g, '');
