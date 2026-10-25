@@ -21,6 +21,8 @@
   .q-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
   .q-car{font-size:26px;font-weight:800;line-height:1.2;color:var(--navy-deep);letter-spacing:.01em}
   .q-app{font-size:12px;color:var(--sub);white-space:nowrap}
+  .q-recent{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:14px;line-height:1.6}
+  .q-recent b{font-size:13px;color:var(--sub,#5F6D7B)}
   .q-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
   .q-lab{font-size:13px;font-weight:700;color:var(--sub);margin:0 0 8px;letter-spacing:.04em}
   .q-book{font-size:15px;line-height:1.6}
@@ -65,6 +67,7 @@
   <section class="q-card" aria-live="polite">
     <p class="q-lab">いまの予約</p>
     <div class="q-book" id="book"><span class="q-muted">予約を確認しています…（そのまま入力できます）</span></div>
+    <div id="recent" hidden></div>
   </section>
 
   <div class="q-toggle" role="group" aria-label="出発か帰着か">
@@ -115,7 +118,7 @@
   var qs = new URLSearchParams(location.search);
   var C = qs.get('c') || '', K = qs.get('k') || '', DEMO = qs.has('demo');
   var $ = function (id) { return document.getElementById(id); };
-  var state = null, kind = 'depart', name = '', sending = false, staff = null, dest = '', alc = '';
+  var state = null, kind = 'depart', name = '', sending = false, staff = null, dest = '', alc = '', confirmFor = '';
   var mode = 'normal'; // 'trip' = 泊まりの出張の途中（「今日の終わり」と「帰着」を選ぶ）
   var saved = '';
   try { saved = localStorage.getItem('hq_name') || ''; } catch (e) { saved = ''; }
@@ -245,6 +248,13 @@
         ? 'この車は予約なしで使います。行き先だけ教えてください。'
         : 'このまま記録すると「予約なし」で入り、配車担当に知らせます。'));
     }
+    // この車の最近の記録（押す前に、もう誰かが入れたか・誰の車かが分かるように。2026-10-25）
+    var rc = $('recent'); rc.innerHTML = '';
+    if (s.recent && s.recent.length) {
+      rc.className = 'q-recent'; rc.hidden = false;
+      rc.appendChild(el('b', '', 'この車の最近の記録'));
+      s.recent.forEach(function (x) { rc.appendChild(el('div', '', x.when + '　' + x.what + '　' + fmt(x.odo) + 'km' + (x.name ? '（' + x.name + '）' : ''))); });
+    } else { rc.hidden = true; }
     // 泊まりの出張の途中: 毎日の運転の終わりに「今日の終わり」、最終日に「帰着」（2026-10-02 利用者の声から）
     mode = s.kind === 'midtrip' ? 'trip' : 'normal';
     if (mode === 'trip') {
@@ -283,6 +293,13 @@
     if (sending) return;
     var drank = (kind === 'depart' && alc === 'ng');
     if (!kind) { say(false, '宿・出張先で今日を終えたのか、会社に戻ったのかを選んでください。'); return; }
+    // 予約の乗る人ではない人が「帰着」→ 隣の車のQRを読んでいないか、1回だけ確かめる（2026-10-25 浅岡さんが隣の車で帰着）
+    var ppl0 = (state && state.booking && state.booking.drivers) || [];
+    if (kind === 'return' && name && ppl0.length && ppl0.indexOf(name) < 0 && confirmFor !== name) {
+      confirmFor = name;
+      say(false, 'この車（' + ($('car').textContent || '') + '）は ' + ppl0.join('・') + ' さんの予約です。乗っている車のQRか確かめてください。合っていれば、もう一度「記録する」を押してください。');
+      return;
+    }
     if (kind === 'depart' && !alc) { say(false, '出発の前の確認（お酒）を選んでください。'); return; }
     if (!name) { say(false, '入れる人の名前を選んでください。'); return; }
     var odo = $('odo').value.replace(/[^0-9]/g, '');
@@ -312,7 +329,8 @@
           day: { date: '2026-10-01', label: '10/1(木)', start: 236790, done: false, odoEnd: null, last: '10/2(金)', lastTomorrow: true } });
         if (method === 'GET' && params.op === 'state' && location.search.indexOf('nob') >= 0) return res({ ok: true, car: { key: 'kei_9948', name: '軽トラ [99-48]' }, kind: 'depart', prev: 45200, noBookingOk: true, dests: ['吉田倉庫', '大井川小径木', '櫻井', '吉田事務所'] });
         if (method === 'GET') return res({ ok: true, car: { key: 'hiace_blue', name: 'ハイエース 青[16-38]' }, kind: 'depart', prev: 227150,
-          booking: { id: 1, when: '9/28(月) 8:00 〜 9/28(月) 17:00', who: '見本 一郎・見本 二郎', dest: '見本の行き先', drivers: ['見本 一郎', '見本 二郎'], odoStart: null } });
+          booking: { id: 1, when: '9/28(月) 8:00 〜 9/28(月) 17:00', who: '見本 一郎・見本 二郎', dest: '見本の行き先', drivers: ['見本 一郎', '見本 二郎'], odoStart: null },
+          recent: [{ when: '9/27(日) 16:40', what: '帰着', odo: 227150, name: '見本 三郎' }, { when: '9/27(日) 8:05', what: '出発', odo: 226980, name: '見本 三郎' }] });
         if (params.kind === 'depart' && params.alc === 'ng') return res({ ok: true, kind: 'alcohol', message: 'わかりました。運転を交代してください。\n三浦 さんに知らせました。\nお酒が抜けてから、交代の方がこのQRで「出発」を入れてください。' });
         res({ ok: true, message: (params.kind === 'depart' ? '出発' : '帰着') + 'を記録しました（9/28(月) 8:02　' + fmt(params.odo) + 'km）' });
       }, 1200);
