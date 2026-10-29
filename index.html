@@ -31,6 +31,8 @@
   .q-toggle{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;border:2px solid var(--navy);border-radius:12px;overflow:hidden}
   .q-toggle button{appearance:none;border:0;background:var(--paper);color:var(--navy);font:inherit;font-size:18px;font-weight:800;padding:14px 8px;line-height:1.3}
   .q-toggle button.q-on{background:var(--navy);color:#fff}
+  .q-toggle.q-three{grid-template-columns:minmax(0,1fr)}
+  .q-toggle.q-three button+button{border-top:2px solid var(--navy)}
   .q-names{display:flex;flex-wrap:wrap;gap:8px}
   .q-chip{appearance:none;font:inherit;font-size:16px;font-weight:700;padding:11px 14px;border-radius:999px;
     border:2px solid var(--line);background:var(--paper);color:var(--ink)}
@@ -72,6 +74,7 @@
 
   <div class="q-toggle" role="group" aria-label="出発か帰着か">
     <button type="button" id="tDep" class="q-on">出発</button>
+    <button type="button" id="tStay" hidden>🏢 会社に戻った（明日も使う）</button>
     <button type="button" id="tRet">帰着</button>
   </div>
 
@@ -120,6 +123,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var state = null, kind = 'depart', name = '', sending = false, staff = null, dest = '', alc = '', confirmFor = '';
   var mode = 'normal'; // 'trip' = 泊まりの出張の途中（「今日の終わり」と「帰着」を選ぶ）
+  // 長い予約（最終日まで3日以上）の途中は3つから選ぶ: 宿で終えた／会社に戻った（明日も使う）／返した（2026-10-29 渡辺さん [11-61]）
+  var longStay = false, sub = '';
   var saved = '';
   try { saved = localStorage.getItem('hq_name') || ''; } catch (e) { saved = ''; }
   name = saved;
@@ -131,9 +136,13 @@
   function setKind(k) {
     kind = k;
     var trip = mode === 'trip';
+    var three = trip && longStay;
     $('tDep').textContent = trip ? '🏨 宿・出張先で今日を終えた' : '出発';
-    $('tRet').textContent = trip ? '🏢 会社に戻った（返す）' : '帰着';
-    $('tDep').className = (k === 'depart' || k === 'dayend') ? 'q-on' : '';
+    $('tRet').textContent = three ? '🔑 返した（もう使わない）' : trip ? '🏢 会社に戻った（返す）' : '帰着';
+    $('tStay').hidden = !three;
+    $('tDep').parentNode.className = 'q-toggle' + (three ? ' q-three' : '');
+    $('tDep').className = (k === 'depart' || (k === 'dayend' && sub !== 'office')) ? 'q-on' : '';
+    $('tStay').className = (k === 'dayend' && sub === 'office') ? 'q-on' : '';
     $('tRet').className = k === 'return' ? 'q-on' : '';
     $('alcCard').hidden = (k !== 'depart'); // 酒気確認は出発のときだけ（案B 2026-10-03）
     syncGo();
@@ -146,7 +155,8 @@
     var drank = (kind === 'depart' && alc === 'ng');
     $('meterCard').hidden = drank;
     $('go').textContent = !kind ? '上で「宿」か「会社」を選んでください' : drank ? '飲酒を申告する（運転しません）'
-      : (kind === 'depart' ? '出発' : kind === 'dayend' ? '今日の終わり' : mode === 'trip' ? '会社に戻った（帰着）' : '帰着') + 'を記録する';
+      : (kind === 'depart' ? '出発' : kind === 'dayend' ? (sub === 'office' ? '今日の終わり（明日も使う）' : '今日の終わり')
+        : mode === 'trip' ? (longStay ? '返した（帰着）' : '会社に戻った（帰着）') : '帰着') + 'を記録する';
   }
   function setAlc(v) { alc = v; drawAlc(); syncGo(); }
   function hint() {
@@ -257,13 +267,17 @@
     } else { rc.hidden = true; }
     // 泊まりの出張の途中: 毎日の運転の終わりに「今日の終わり」、最終日に「帰着」（2026-10-02 利用者の声から）
     mode = s.kind === 'midtrip' ? 'trip' : 'normal';
+    longStay = Boolean(mode === 'trip' && s.day && s.day.daysLeft >= 3);
+    sub = '';
     if (mode === 'trip') {
       var dd = s.day || {};
       box.appendChild(el('div', 'q-muted', '泊まりの出張の途中です' + (dd.last ? '（最終日 ' + dd.last + '）' : '') + '。'));
       box.appendChild(el('div', 'q-muted', dd.done
         ? '今日の記録は済んでいます（' + fmt(dd.odoEnd) + 'km）。直すときは、もう一度入れてください。'
         : '今日の運転を終えたら、宿・出張先か、会社に戻ったかを選んでメーターを入れてください。'));
-      box.appendChild(el('div', 'q-muted', '予定より早く会社に戻ったときも「会社に戻った」を押してください。残りの日の予約が空きます。'));
+      box.appendChild(el('div', 'q-muted', longStay
+        ? '会社に戻って明日も使うときは「会社に戻った（明日も使う）」を押してください。車を返す・もう使わないときだけ「返した」を押してください（' + (s.day.endLabel || s.day.last) + ' までの予約が空きます）。'
+        : '予定より早く会社に戻ったときも「会社に戻った」を押してください。残りの日の予約が空きます。'));
       var tn = el('div', 'q-muted', '出張中の車ですが、出張の人ではないので「出発」で入れます。出張は会社に戻っていたものとして締めます。');
       tn.id = 'tripNote'; tn.hidden = true; box.appendChild(tn);
       setKind('');
@@ -282,8 +296,9 @@
     return null;
   });
 
-  $('tDep').onclick = function () { setKind(mode === 'trip' ? 'dayend' : 'depart'); };
-  $('tRet').onclick = function () { setKind('return'); };
+  $('tDep').onclick = function () { sub = mode === 'trip' ? 'inn' : ''; setKind(mode === 'trip' ? 'dayend' : 'depart'); };
+  $('tStay').onclick = function () { sub = 'office'; setKind('dayend'); };
+  $('tRet').onclick = function () { sub = ''; setKind('return'); };
   $('aNo').onclick = function () { setAlc('ok'); };
   $('aYes').onclick = function () { setAlc('ng'); };
   $('search').oninput = drawList;
@@ -292,7 +307,7 @@
   $('go').onclick = function () {
     if (sending) return;
     var drank = (kind === 'depart' && alc === 'ng');
-    if (!kind) { say(false, '宿・出張先で今日を終えたのか、会社に戻ったのかを選んでください。'); return; }
+    if (!kind) { say(false, longStay ? '宿で終えたのか、会社に戻った（明日も使う）のか、返したのかを選んでください。' : '宿・出張先で今日を終えたのか、会社に戻ったのかを選んでください。'); return; }
     // 予約の乗る人ではない人が「帰着」→ 隣の車のQRを読んでいないか、1回だけ確かめる（2026-10-25 浅岡さんが隣の車で帰着）
     var ppl0 = (state && state.booking && state.booking.drivers) || [];
     if (kind === 'return' && name && ppl0.length && ppl0.indexOf(name) < 0 && confirmFor !== name) {
@@ -324,6 +339,9 @@
     return new Promise(function (res) {
       setTimeout(function () {
         if (method === 'GET' && params.op === 'staff') return res({ ok: true, staff: ['見本 一郎', '見本 二郎', '見本 花子', '見本 三郎'] });
+        if (method === 'GET' && params.op === 'state' && location.search.indexOf('long') >= 0) return res({ ok: true, car: { key: 'rent_4348', name: 'レンタカー ハイエース [11-61]' }, kind: 'midtrip', prev: 115520,
+          booking: { id: 247, when: '10/26(月) 8:00 〜 12/25(金) 17:00', who: '見本 一郎', dest: '奈良', drivers: ['見本 一郎'], odoStart: 115520 },
+          day: { date: '2026-10-27', label: '10/27(火)', start: 115520, done: false, odoEnd: null, last: '12/25(金)', lastTomorrow: false, daysLeft: 59, endLabel: '12/25(金) 17:00' } });
         if (method === 'GET' && params.op === 'state' && location.search.indexOf('trip') >= 0) return res({ ok: true, car: { key: 'hiace_white', name: 'ハイエース 白[ 2-77]' }, kind: 'midtrip', prev: 236790,
           booking: { id: 75, when: '9/30(水) 15:00 〜 10/2(金) 18:30', who: '見本 一郎', dest: '見本の行き先', drivers: ['見本 一郎'], odoStart: 236790 },
           day: { date: '2026-10-01', label: '10/1(木)', start: 236790, done: false, odoEnd: null, last: '10/2(金)', lastTomorrow: true } });
