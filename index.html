@@ -52,6 +52,8 @@
   .q-msg{border-radius:12px;padding:14px 16px;font-size:16px;line-height:1.6;font-weight:600;white-space:pre-line}
   .q-msg.q-ok{background:var(--ok-tint);color:var(--ok);border:1px solid #BFE0CC}
   .q-msg.q-ng{background:var(--ng-tint);color:var(--ng);border:1px solid #EDC3BC}
+  .q-hint.q-warn{color:var(--ng);font-weight:700}
+  .q-undo{appearance:none;width:100%;font:inherit;font-size:16px;font-weight:700;padding:13px;border-radius:12px;border:2px solid var(--line);background:var(--paper);color:var(--ink)}
   .q-foot{font-size:12px;color:var(--sub);text-align:center}
   button:focus-visible,input:focus-visible{outline:3px solid #7FB2E0;outline-offset:2px}
   #aNo.q-on{background:var(--ok);color:#fff}
@@ -113,6 +115,7 @@
 
   <button class="q-go" id="go" type="button">出発を記録する</button>
   <div class="q-msg" id="msg" hidden></div>
+  <button class="q-undo" id="undo" type="button" hidden>↩ 間違えた・取り消す（10分以内）</button>
   <p class="q-foot">時刻は押したときの時刻で入ります。間違えたら入れ直せば上書きされます。</p>
 </main>
 
@@ -162,12 +165,22 @@
         : mode === 'trip' ? (longStay ? '返した（帰着）' : '会社に戻った（帰着）') : '帰着') + 'を記録する';
   }
   function setAlc(v) { alc = v; drawAlc(); syncGo(); }
+  // メーターを打つと、もとの数字との差をその場で出す（打ち間違いに押す前に気づけるように。2026-11-04 田中さん）
   function hint() {
-    var h = '';
-    if (kind === 'dayend' && state && state.day && state.day.start != null) h = '今日のはじめ ' + fmt(state.day.start) + 'km';
-    else if (state && state.booking && state.booking.odoStart != null && kind === 'return') h = '出発のとき ' + fmt(state.booking.odoStart) + 'km';
-    else if (state && state.prev != null) h = '前回の記録 ' + fmt(state.prev) + 'km';
+    var label = '', base = null;
+    if (kind === 'dayend' && state && state.day && state.day.start != null) { label = '今日のはじめ'; base = state.day.start; }
+    else if (state && state.booking && state.booking.odoStart != null && kind === 'return') { label = '出発のとき'; base = state.booking.odoStart; }
+    else if (state && state.prev != null) { label = '前回の記録'; base = state.prev; }
+    var h = base == null ? '' : label + ' ' + fmt(base) + 'km', warn = false;
+    var n = Number(($('odo').value || '').replace(/[^0-9]/g, ''));
+    if (base != null && n) {
+      var d = n - base;
+      if (d < 0) { h += '　→ ' + fmt(-d) + 'km 少ない数字です。見直してください'; warn = true; }
+      else if (d > 1500) { h += '　→ ＋' + fmt(d) + 'km。大きすぎないか見直してください'; warn = true; }
+      else h += '　→ ＋' + fmt(d) + 'km';
+    }
     $('hint').textContent = h;
+    $('hint').className = 'q-hint' + (warn ? ' q-warn' : '');
   }
   function pick(n) {
     name = n; saved = n;
@@ -315,7 +328,21 @@
   $('aNo').onclick = function () { setAlc('ok'); };
   $('aYes').onclick = function () { setAlc('ng'); };
   $('search').oninput = drawList;
-  $('odo').oninput = function () { var v = this.value.replace(/[^0-9]/g, ''); this.value = v ? fmt(v) : ''; };
+  $('odo').oninput = function () { var v = this.value.replace(/[^0-9]/g, ''); this.value = v ? fmt(v) : ''; hint(); };
+  var undoToken = '';
+  $('undo').onclick = function () {
+    if (!undoToken) return;
+    $('undo').disabled = true;
+    call('POST', { car: C, key: K, undo: undoToken }).then(function (r) {
+      $('undo').disabled = false;
+      if (r && r.ok) {
+        undoToken = ''; $('undo').hidden = true; $('odo').value = '';
+        sending = false; $('go').disabled = false;
+        return call('GET', { op: 'state' }).then(function (s) { showState(s); say(true, '↩ ' + r.message); });
+      }
+      say(false, (r && r.error) || '取り消せませんでした。配車担当に知らせてください。');
+    }).catch(function () { $('undo').disabled = false; say(false, '送れませんでした（電波が弱いかもしれません）。もう一度押してください。'); });
+  };
 
   $('go').onclick = function () {
     if (sending) return;
@@ -338,7 +365,14 @@
       var d = ($('destOther').value || dest || '').trim();
       return call('POST', { car: C, key: K, kind: kind, odo: drank ? '' : odo, name: name, dest: d, alc: kind === 'depart' ? alc : '', bookingId: state && state.booking ? state.booking.id : '' });
     }).then(function (r) {
-      if (r && r.ok) { say(true, '✅ ' + r.message + '\nこの画面は閉じて大丈夫です。'); $('go').textContent = '記録しました'; return; }
+      if (r && r.ok) {
+        say(true, '✅ ' + r.message + '\nこの画面は閉じて大丈夫です。'); $('go').textContent = '記録しました';
+        if (r.undo) {
+          undoToken = r.undo; $('undo').hidden = false;
+          setTimeout(function () { undoToken = ''; $('undo').hidden = true; }, 600000);
+        }
+        return;
+      }
       say(false, (r && r.error) || '記録できませんでした。もう一度押してください。');
       sending = false; $('go').disabled = false; setKind(kind);
     }).catch(function () {
@@ -363,7 +397,8 @@
           booking: { id: 1, when: '9/28(月) 8:00 〜 9/28(月) 17:00', who: '見本 一郎・見本 二郎', dest: '見本の行き先', drivers: ['見本 一郎', '見本 二郎'], odoStart: null },
           recent: [{ when: '9/27(日) 16:40', what: '帰着', odo: 227150, name: '見本 三郎' }, { when: '9/27(日) 8:05', what: '出発', odo: 226980, name: '見本 三郎' }] });
         if (params.kind === 'depart' && params.alc === 'ng') return res({ ok: true, kind: 'alcohol', message: 'わかりました。運転を交代してください。\n三浦 さんに知らせました。\nお酒が抜けてから、交代の方がこのQRで「出発」を入れてください。' });
-        res({ ok: true, message: (params.kind === 'depart' ? '出発' : '帰着') + 'を記録しました（9/28(月) 8:02　' + fmt(params.odo) + 'km）' });
+        if (params.undo) return res({ ok: true, message: 'さきほどの記録を取り消しました。正しい内容で入れ直してください。' });
+        res({ ok: true, undo: 'demo', message: (params.kind === 'depart' ? '出発' : '帰着') + 'を記録しました（9/28(月) 8:02　' + fmt(params.odo) + 'km）' });
       }, 1200);
     });
   }
