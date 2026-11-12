@@ -303,10 +303,10 @@
   // まだ足りないものと、ボタンの文字
   function missing() {
     var m = [];
-    if (!kind) return [{ id: 'kindCard', word: mode !== 'trip' ? '出発か帰着か' : (startable || notRider) ? '乗る前か、終わり方' : '終わり方' }];
+    if (!kind) m.push({ id: 'kindCard', word: mode !== 'trip' ? '出発か帰着' : (startable || notRider) ? '出発か終わり方' : '終わり方' });
     var drank = isStart(kind) && alc === 'ng';
     if (isStart(kind) && !alc) m.push({ id: 'alcCard', word: 'お酒の確認' });
-    if (!name) m.push({ id: 'nameCard', word: '名前' });
+    if (!name) m.push({ id: 'nameCard', word: '乗る人' });
     if (!drank && !odoNum()) m.push({ id: 'meterCard', word: 'メーター' });
     return m;
   }
@@ -318,6 +318,8 @@
     if (kind === 'return') return mode === 'trip' ? '車を返した（帰着）を記録する' : '帰着を記録する';
     return '記録する';
   }
+  // 「未入力が 3 か所あります：終わり方／乗る人／メーター」（2026-11-13 田中さんの案）
+  function leftText(m) { return '未入力が ' + m.length + ' か所あります：' + m.map(function (x) { return x.word; }).join('／'); }
   function clock() { var d = new Date(); return d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes(); }
   function sync() {
     if (sending) return;
@@ -326,7 +328,7 @@
     ['kindCard', 'alcCard', 'nameCard', 'meterCard'].forEach(function (id) { $(id).className = $(id).className.replace(/\s*q-need/g, ''); });
     $('go').textContent = goLabel();
     $('go').className = 'q-go' + (m.length ? ' q-wait' : '');
-    $('left').textContent = m.length ? 'あと：' + m.map(function (x) { return x.word; }).join('・') : 'いまの時刻（' + clock() + '）で記録します';
+    $('left').textContent = m.length ? leftText(m) : 'いまの時刻（' + clock() + '）で記録します';
   }
   setInterval(function () { if (!sending && !$('form').hidden) sync(); }, 20000);
 
@@ -539,7 +541,7 @@
       // 足りない所に色を付けて、そこまで画面を動かす
       sync();
       try { $(m[0].id).scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { $(m[0].id).scrollIntoView(); }
-      say(false, m[0].id === 'kindCard' ? (mode === 'trip' ? '終わり方を選んでください。' : '出発か帰着かを選んでください。') : m.map(function (x) { return x.word; }).join('・') + ' がまだです。', true);
+      say(false, leftText(m) + '\n赤い枠の所から入れてください。', true);
       $(m[0].id).className += ' q-need';
       if (m[0].id === 'meterCard') $('odo').focus();
       return;
