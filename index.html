@@ -75,6 +75,7 @@
   </section>
 
   <div class="q-toggle" role="group" aria-label="出発か帰着か">
+    <button type="button" id="tStart" hidden>🚗 今日の出発（これから乗る）</button>
     <button type="button" id="tOut" hidden>🚗 これから乗る（出発）</button>
     <button type="button" id="tDep" class="q-on">出発</button>
     <button type="button" id="tStay" hidden>🏢 会社に戻った（明日も使う）</button>
@@ -128,7 +129,8 @@
   var state = null, kind = 'depart', name = '', sending = false, staff = null, dest = '', alc = '', confirmFor = '';
   var mode = 'normal'; // 'trip' = 泊まりの出張の途中（「今日の終わり」と「帰着」を選ぶ）
   // 長い予約（最終日まで3日以上）の途中は3つから選ぶ: 宿で終えた／会社に戻った（明日も使う）／返した（2026-10-29 渡辺さん [11-61]）
-  var longStay = false, sub = '', notRider = false;
+  var longStay = false, sub = '', notRider = false, startable = false;
+  function isStart(k) { return k === 'depart' || k === 'daystart'; }
   var saved = '';
   try { saved = localStorage.getItem('hq_name') || ''; } catch (e) { saved = ''; }
   name = saved;
@@ -141,16 +143,19 @@
     kind = k;
     var trip = mode === 'trip';
     var three = trip && longStay;
+    var showStart = trip && startable && !notRider;
     $('tDep').textContent = trip ? '🏨 宿・出張先で今日を終えた' : '出発';
     $('tRet').textContent = three ? '🔑 返した（もう使わない）' : trip ? '🏢 会社に戻った（返す）' : '帰着';
     $('tStay').hidden = !three;
     $('tOut').hidden = !(three && notRider);
+    $('tStart').hidden = !showStart;
+    $('tStart').className = k === 'daystart' ? 'q-on' : '';
     $('tOut').className = k === 'depart' ? 'q-on' : '';
-    $('tDep').parentNode.className = 'q-toggle' + (three ? ' q-three' : '');
-    $('tDep').className = ((k === 'depart' && !three) || (k === 'dayend' && sub !== 'office')) ? 'q-on' : '';
+    $('tDep').parentNode.className = 'q-toggle' + ((three || showStart) ? ' q-three' : '');
+    $('tDep').className = ((k === 'depart' && !trip) || (k === 'dayend' && sub !== 'office')) ? 'q-on' : '';
     $('tStay').className = (k === 'dayend' && sub === 'office') ? 'q-on' : '';
     $('tRet').className = k === 'return' ? 'q-on' : '';
-    $('alcCard').hidden = (k !== 'depart'); // 酒気確認は出発のときだけ（案B 2026-10-03）
+    $('alcCard').hidden = !isStart(k); // 酒気確認は出発（今日の出発）のときだけ（案B 2026-10-03）
     syncGo();
     if (state) drawDests(state);
     hint();
@@ -158,17 +163,18 @@
   // 酒気確認（飲んでいません／飲みました）。飲みましたのときはメーターは要らない
   function drawAlc() { $('aNo').className = alc === 'ok' ? 'q-on' : ''; $('aYes').className = 'q-yes' + (alc === 'ng' ? ' q-on' : ''); }
   function syncGo() {
-    var drank = (kind === 'depart' && alc === 'ng');
+    var drank = (isStart(kind) && alc === 'ng');
     $('meterCard').hidden = drank;
     $('go').textContent = !kind ? '上で「宿」か「会社」を選んでください' : drank ? '飲酒を申告する（運転しません）'
-      : (kind === 'depart' ? '出発' : kind === 'dayend' ? (sub === 'office' ? '今日の終わり（明日も使う）' : '今日の終わり')
+      : (kind === 'depart' ? '出発' : kind === 'daystart' ? '今日の出発' : kind === 'dayend' ? (sub === 'office' ? '今日の終わり（明日も使う）' : '今日の終わり')
         : mode === 'trip' ? (longStay ? '返した（帰着）' : '会社に戻った（帰着）') : '帰着') + 'を記録する';
   }
   function setAlc(v) { alc = v; drawAlc(); syncGo(); }
   // メーターを打つと、もとの数字との差をその場で出す（打ち間違いに押す前に気づけるように。2026-11-04 田中さん）
   function hint() {
     var label = '', base = null;
-    if (kind === 'dayend' && state && state.day && state.day.start != null) { label = '今日のはじめ'; base = state.day.start; }
+    if (kind === 'daystart' && state && state.day && state.day.start != null) { label = '前の日の終わり'; base = state.day.start; }
+    else if (kind === 'dayend' && state && state.day && state.day.start != null) { label = '今日のはじめ'; base = state.day.start; }
     else if (state && state.booking && state.booking.odoStart != null && kind === 'return') { label = '出発のとき'; base = state.booking.odoStart; }
     else if (state && state.prev != null) { label = '前回の記録'; base = state.prev; }
     var h = base == null ? '' : label + ' ' + fmt(base) + 'km', warn = false;
@@ -293,6 +299,7 @@
     // 泊まりの出張の途中: 毎日の運転の終わりに「今日の終わり」、最終日に「帰着」（2026-10-02 利用者の声から）
     mode = s.kind === 'midtrip' ? 'trip' : 'normal';
     longStay = Boolean(mode === 'trip' && s.day && s.day.daysLeft >= 3);
+    startable = Boolean(mode === 'trip' && s.day && !s.day.startedToday);
     sub = ''; notRider = false;
     if (mode === 'trip') {
       var dd = s.day || {};
@@ -300,12 +307,14 @@
       box.appendChild(el('div', 'q-muted', dd.done
         ? '今日の記録は済んでいます（' + fmt(dd.odoEnd) + 'km）。直すときは、もう一度入れてください。'
         : '今日の運転を終えたら、宿・出張先か、会社に戻ったかを選んでメーターを入れてください。'));
+      if (startable) box.appendChild(el('div', 'q-muted', '朝、乗る前は「今日の出発」を押してください（お酒の確認も一緒に入ります）。'));
       box.appendChild(el('div', 'q-muted', longStay
         ? '会社に戻って明日も使うときは「会社に戻った（明日も使う）」を押してください。車を返す・もう使わないときだけ「返した」を押してください（' + (s.day.endLabel || s.day.last) + ' までの予約が空きます）。'
         : '予定より早く会社に戻ったときも「会社に戻った」を押してください。残りの日の予約が空きます。'));
       var tn = el('div', 'q-muted', '出張中の車ですが、出張の人ではないので「出発」で入れます。出張は会社に戻っていたものとして締めます。');
       tn.id = 'tripNote'; tn.hidden = true; box.appendChild(tn);
-      setKind('');
+      // 午前中で今日の出発がまだなら、最初から「今日の出発」を選んでおく
+      setKind(startable && new Date().getHours() < 12 ? 'daystart' : '');
     } else {
       setKind(s.kind === 'return' ? 'return' : 'depart');
     }
@@ -323,6 +332,7 @@
 
   $('tDep').onclick = function () { sub = mode === 'trip' ? 'inn' : ''; setKind(mode === 'trip' ? 'dayend' : 'depart'); };
   $('tOut').onclick = function () { sub = ''; setKind('depart'); };
+  $('tStart').onclick = function () { sub = ''; setKind('daystart'); };
   $('tStay').onclick = function () { sub = 'office'; setKind('dayend'); };
   $('tRet').onclick = function () { sub = ''; setKind('return'); };
   $('aNo').onclick = function () { setAlc('ok'); };
@@ -346,7 +356,7 @@
 
   $('go').onclick = function () {
     if (sending) return;
-    var drank = (kind === 'depart' && alc === 'ng');
+    var drank = (isStart(kind) && alc === 'ng');
     if (!kind) { say(false, longStay ? '宿で終えたのか、会社に戻った（明日も使う）のか、返したのかを選んでください。' : '宿・出張先で今日を終えたのか、会社に戻ったのかを選んでください。'); return; }
     // 予約の乗る人ではない人が「帰着」→ 隣の車のQRを読んでいないか、1回だけ確かめる（2026-10-25 浅岡さんが隣の車で帰着）
     var ppl0 = (state && state.booking && state.booking.drivers) || [];
@@ -355,7 +365,7 @@
       say(false, 'この車（' + ($('car').textContent || '') + '）は ' + ppl0.join('・') + ' さんの予約です。乗っている車のQRか確かめてください。合っていれば、もう一度「記録する」を押してください。');
       return;
     }
-    if (kind === 'depart' && !alc) { say(false, '出発の前の確認（お酒）を選んでください。'); return; }
+    if (isStart(kind) && !alc) { say(false, '出発の前の確認（お酒）を選んでください。'); return; }
     if (!name) { say(false, '入れる人の名前を選んでください。'); return; }
     var odo = $('odo').value.replace(/[^0-9]/g, '');
     if (!drank && !odo) { say(false, 'メーターの数字を入れてください。'); $('odo').focus(); return; }
@@ -363,7 +373,7 @@
     // 予約の確認がまだ終わっていなければ、終わるのを待ってから送る（数秒）
     loading.then(function () {
       var d = ($('destOther').value || dest || '').trim();
-      return call('POST', { car: C, key: K, kind: kind, odo: drank ? '' : odo, name: name, dest: d, alc: kind === 'depart' ? alc : '', bookingId: state && state.booking ? state.booking.id : '' });
+      return call('POST', { car: C, key: K, kind: kind, odo: drank ? '' : odo, name: name, dest: d, alc: isStart(kind) ? alc : '', bookingId: state && state.booking ? state.booking.id : '' });
     }).then(function (r) {
       if (r && r.ok) {
         say(true, '✅ ' + r.message + '\nこの画面は閉じて大丈夫です。'); $('go').textContent = '記録しました';
