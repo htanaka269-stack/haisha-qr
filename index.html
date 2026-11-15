@@ -285,8 +285,10 @@
   // メーター: もとの数字を大きく出し、打った数字との差をその場で出す
   function baseOf() {
     var d = state && state.day;
-    if (kind === 'daystart' && d && d.start != null) return { label: '前の日の終わり', odo: d.start, same: true };
-    if (kind === 'dayend' && d && d.start != null) return { label: '今日のはじめ', odo: d.start };
+    // 前の日の記録が無いとき（乗らなかった日）は、いちばん近い日の記録が届く（startFrom にその日付）
+    var from = d && d.startFrom ? '最後の記録（' + d.startFrom + '）' : '';
+    if (kind === 'daystart' && d && d.start != null) return { label: from || '前の日の終わり', odo: d.start, same: true };
+    if (kind === 'dayend' && d && d.start != null) return { label: from || '今日のはじめ', odo: d.start };
     if (kind === 'return' && state && state.booking && state.booking.odoStart != null) return { label: '出発のとき', odo: state.booking.odoStart };
     if (state && state.prev != null) return { label: '前回の記録', odo: state.prev, same: kind === 'depart' };
     return null;
