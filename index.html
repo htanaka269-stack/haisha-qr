@@ -125,7 +125,11 @@
         <div id="grpTrip" hidden>
           <div id="startBox">
             <p class="q-lab">乗る前</p>
-            <div class="q-opts"><button type="button" class="q-opt" id="tStart"><span class="q-ic">🚗</span><span id="tStartText">今日の出発</span></button></div>
+            <div class="q-opts">
+              <button type="button" class="q-opt" id="tStart"><span class="q-ic">🚗</span><span id="tStartText">今日の出発</span></button>
+              <button type="button" class="q-opt q-minor" id="tOther" hidden><span class="q-ic">🚙</span><span>別の用事で乗る（車は会社に戻っていた）</span></button>
+              <div class="q-note" id="otherNote" hidden></div>
+            </div>
           </div>
           <button type="button" class="q-link" id="moreEnd">運転を終えたときは、こちら</button>
           <div id="endBox">
@@ -251,8 +255,11 @@
       $('moreEnd').hidden = endOpen;
       $('moreEnd').textContent = dayDone() ? '今日の記録を直すときは、こちら' : '運転を終えたときは、こちら';
       $('endBox').hidden = !endOpen;
-      $('tStartText').textContent = notRider ? '出発' : '今日の出発';
-      on('tStart', isStart(kind));
+      // 予約に入っていない人: 「この出張の続き」（予約は残り、乗る人に加わる）か「別の用事」（出張は会社に戻っていたものとして締まる）を選ぶ
+      $('tStartText').textContent = notRider ? '今日の出発（この出張の続きで乗る）' : '今日の出発';
+      $('tOther').hidden = !notRider; $('otherNote').hidden = !notRider;
+      on('tStart', kind === 'daystart');
+      on('tOther', kind === 'depart');
       on('tInn', kind === 'dayend' && sub === 'inn');
       on('tStay', kind === 'dayend' && sub === 'office');
       on('tBack', kind === 'return');
@@ -269,7 +276,8 @@
     var g = $('guide'); if (!g) return;
     var t = '';
     if (mode === 'trip') {
-      if (notRider) t = '予約に入っていない方です。これから乗るときは「出発」、運転を終えたときは終わり方を選んでください。';
+      if (notRider && !kind) t = '予約に入っていない方です。この出張の続きで乗るなら「今日の出発」、運転を終えたときは終わり方を選んでください。';
+      else if (notRider && kind === 'depart') t = '別の用事として記録します。もとの出張の予約は、ここで終わります。';
       else if (isStart(kind)) t = '乗る前に：お酒の確認 → メーター → 記録する';
       else if (kind === 'dayend') t = '今日の終わりのメーターを入れて、記録してください。予約はそのまま残ります。';
       else if (kind === 'return') t = '車を返すときの記録です。このあとの予約は空きます。';
@@ -470,6 +478,7 @@
 
     startable = Boolean(mode === 'trip' && !dd.startedToday);
     notRider = false; alc = ''; on('aNo', false); on('aYes', false);
+    $('otherNote').textContent = '押すと、' + (s.booking ? s.booking.who + ' さんの' : '') + '予約（' + (dd.endLabel || dd.last || '') + ' まで）は、ここで終わります。出張の続きなら押さないでください。';
     $('backNote').textContent = '押すと、' + (dd.endLabel || dd.last || 'このあと') + ' までの予約が空きます。明日も使うときは押さないでください。';
 
     // 名前: 予約の人が1人だけで、この端末で前に別の人を選んでいなければ、最初から選んでおく
@@ -509,8 +518,9 @@
   function choose(k, s) { touched = true; $('msg').hidden = true; setKind(k, s); }
   $('tDep').onclick = function () { choose('depart'); };
   $('tRet').onclick = function () { choose('return'); };
-  $('tStart').onclick = function () { choose(notRider ? 'depart' : 'daystart'); };
-  $('startLink').onclick = function () { choose(notRider ? 'depart' : 'daystart'); };
+  $('tStart').onclick = function () { choose('daystart'); };
+  $('tOther').onclick = function () { choose('depart'); };
+  $('startLink').onclick = function () { choose('daystart'); };
   $('moreEnd').onclick = function () { touched = true; endOpen = true; setKind(''); };
   $('tInn').onclick = function () { choose('dayend', 'inn'); };
   $('tStay').onclick = function () { choose('dayend', 'office'); };
