@@ -260,6 +260,8 @@
       $('tOther').hidden = !notRider; $('otherNote').hidden = !notRider;
       on('tStart', kind === 'daystart');
       on('tOther', kind === 'depart');
+      var lastDay = Boolean(state && state.day && state.day.daysLeft === 0);
+      $('tInn').hidden = lastDay; $('tStay').hidden = lastDay;
       on('tInn', kind === 'dayend' && sub === 'inn');
       on('tStay', kind === 'dayend' && sub === 'office');
       on('tBack', kind === 'return');
@@ -297,6 +299,7 @@
     var from = d && d.startFrom ? '最後の記録（' + d.startFrom + '）' : '';
     if (kind === 'daystart' && d && d.start != null) return { label: from || '前の日の終わり', odo: d.start, same: true };
     if (kind === 'dayend' && d && d.start != null) return { label: from || '今日のはじめ', odo: d.start };
+    if (kind === 'return' && d && d.returnDay && d.start != null) return { label: from || '今日のはじめ', odo: d.start };
     if (kind === 'return' && state && state.booking && state.booking.odoStart != null) return { label: '出発のとき', odo: state.booking.odoStart };
     if (state && state.prev != null) return { label: '前回の記録', odo: state.prev, same: kind === 'depart' };
     return null;
@@ -455,7 +458,7 @@
     if (s.booking) {
       box.appendChild(el('b', '', s.booking.who + (s.booking.dest ? '（' + s.booking.dest + '）' : '')));
       if (mode === 'trip' && dd.last) {
-        box.appendChild(el('div', 'q-muted', dd.last + ' まで使う予約です' + (dd.daysLeft != null ? '（あと ' + dd.daysLeft + ' 日）' : '')));
+        box.appendChild(el('div', 'q-muted', dd.daysLeft === 0 ? '今日（' + dd.last + '）が最終日の予約です' : dd.last + ' まで使う予約です' + (dd.daysLeft != null ? '（あと ' + dd.daysLeft + ' 日）' : '')));
       } else {
         box.appendChild(el('div', 'q-muted', s.booking.when));
       }
@@ -479,7 +482,7 @@
     startable = Boolean(mode === 'trip' && !dd.startedToday);
     notRider = false; alc = ''; on('aNo', false); on('aYes', false);
     $('otherNote').textContent = '押すと、' + (s.booking ? s.booking.who + ' さんの' : '') + '予約（' + (dd.endLabel || dd.last || '') + ' まで）は、ここで終わります。出張の続きなら押さないでください。';
-    $('backNote').textContent = '押すと、' + (dd.endLabel || dd.last || 'このあと') + ' までの予約が空きます。明日も使うときは押さないでください。';
+    $('backNote').textContent = dd.daysLeft === 0 ? '今日が最終日です。会社に戻って車を返したら、これを押してください。' : '押すと、' + (dd.endLabel || dd.last || 'このあと') + ' までの予約が空きます。明日も使うときは押さないでください。';
 
     // 名前: 予約の人が1人だけで、この端末で前に別の人を選んでいなければ、最初から選んでおく
     var ppl = (s.booking && s.booking.drivers) || [];
@@ -612,6 +615,9 @@
     return new Promise(function (res) {
       setTimeout(function () {
         if (method === 'GET' && params.op === 'staff') return res({ ok: true, staff: ['見本 一郎', '見本 二郎', '見本 花子', '見本 三郎'], keys: { '見本 花子': ['はなこ', 'ハナ'] } });
+        if (method === 'GET' && params.op === 'state' && has('last')) return res({ ok: true, car: { key: 'probox', name: 'プロボックス [56-94]' }, kind: 'midtrip', prev: 91311,
+          booking: { id: 372, when: '11/19(木) 7:30 〜 11/20(金) 8:30', who: '見本 一郎', dest: '県産材', drivers: ['見本 一郎'], odoStart: 90802 },
+          day: { date: '2026-11-20', label: '11/20(金)', start: 91311, startFrom: '', done: false, odoEnd: null, last: '11/20(金)', lastTomorrow: false, daysLeft: 0, endLabel: '11/20(金) 8:30', startedToday: false } });
         if (method === 'GET' && params.op === 'state' && has('long')) return res({ ok: true, car: { key: 'rent_4348', name: 'レンタカー ハイエース [11-61]' }, kind: 'midtrip', prev: 115520,
           booking: { id: 247, when: '10/26(月) 8:00 〜 12/25(金) 17:00', who: '見本 一郎', dest: '奈良', drivers: ['見本 一郎'], odoStart: 115520 },
           day: { date: '2026-10-27', label: '10/27(火)', start: 115520, done: has('done'), odoEnd: has('done') ? 115567 : null, last: '12/25(金)', lastTomorrow: false, daysLeft: 59, endLabel: '12/25(金) 17:00', startedToday: has('started') || has('done') },
