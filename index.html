@@ -135,10 +135,10 @@
           <div id="endBox">
             <p class="q-lab">運転を終えたとき</p>
             <div class="q-opts">
-              <button type="button" class="q-opt" id="tInn"><span class="q-ic">🛏️</span><span>宿・出張先で今日を終えた</span></button>
-              <button type="button" class="q-opt" id="tStay"><span class="q-ic">🏢</span><span>会社に戻った（明日も使う）</span></button>
+              <button type="button" class="q-opt" id="tInn"><span class="q-ic">🛏️</span><span>宿に着いた（明日もこの車で動く）</span></button>
+              <button type="button" class="q-opt" id="tStay"><span class="q-ic">🏢</span><span>会社に戻った（明日もこの車で出る）</span></button>
               <div class="q-sep"></div>
-              <button type="button" class="q-opt q-minor" id="tBack"><span class="q-ic">🔑</span><span>車を返した（もう使わない）</span></button>
+              <button type="button" class="q-opt q-minor" id="tBack"><span class="q-ic">🔑</span><span>出張が終わって、車を返した（予約はここで終わり）</span></button>
               <div class="q-note" id="backNote"></div>
             </div>
             <button type="button" class="q-link" id="startLink" hidden>これから乗るときは、こちら（今日の出発）</button>
@@ -339,7 +339,7 @@
     if (kind === 'depart') return '出発を記録する';
     if (kind === 'daystart') return '今日の出発を記録する';
     if (kind === 'dayend') return '今日の終わりを記録する';
-    if (kind === 'return') return mode === 'trip' ? '車を返した（帰着）を記録する' : '帰着を記録する';
+    if (kind === 'return') return mode === 'trip' ? '車を返したことを記録する' : '帰着を記録する';
     return '記録する';
   }
   // 「未入力が 3 か所あります：終わり方／乗る人／メーター」（2026-11-13 田中さんの案）
@@ -482,7 +482,9 @@
     startable = Boolean(mode === 'trip' && !dd.startedToday);
     notRider = false; alc = ''; on('aNo', false); on('aYes', false);
     $('otherNote').textContent = '押すと、' + (s.booking ? s.booking.who + ' さんの' : '') + '予約（' + (dd.endLabel || dd.last || '') + ' まで）は、ここで終わります。出張の続きなら押さないでください。';
-    $('backNote').textContent = dd.daysLeft === 0 ? '今日が最終日です。会社に戻って車を返したら、これを押してください。' : '押すと、' + (dd.endLabel || dd.last || 'このあと') + ' までの予約が空きます。明日も使うときは押さないでください。';
+    $('backNote').textContent = dd.daysLeft === 0 ? '今日が最終日です。会社に戻って車を返したら、これを押してください。' : (dd.endLabel || dd.last || 'このあと') + ' までの予約が、ここで終わります。宿に着いたとき・明日も乗るときは押さないでください。';
+    // 最終日は「車を返した」がいちばんの答えなので、目立たない見た目をやめる（2026-11-25 言葉の直し）
+    $('tBack').classList.toggle('q-minor', dd.daysLeft !== 0);
 
     // 名前: 予約の人が1人だけで、この端末で前に別の人を選んでいなければ、最初から選んでおく
     var ppl = (s.booking && s.booking.drivers) || [];
