@@ -24,14 +24,14 @@
   .q-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
   /* 未入力は黄色（左の太い線＋「未入力」の札）、入れ終わると緑の ✓。赤は、押したあとの案内と数字の間違いだけ（2026-11-13） */
   .q-card.q-st{position:relative}
-  .q-card.q-todo{border-left:6px solid var(--amber);padding-left:10px;background:#FFFDF5}
-  .q-card.q-fill{border-left:6px solid var(--ok);padding-left:10px}
+  /* 色は札だけに付ける（2026-11-25 見直し: 左の太い線と黄色の地をやめた。押したあとの赤い枠は残す） */
   .q-tag{float:right;margin:-3px 0 6px 8px;font-size:13px;font-weight:800;border-radius:999px;padding:2px 10px;line-height:1.5}
   .q-card.q-st .q-opts.q-two,.q-card.q-st #grpTrip,.q-card.q-st .q-alc,.q-card.q-st .q-names,.q-card.q-st .q-base{clear:both}
   .q-card.q-st::after{content:"";display:block;clear:both}
   .q-todo .q-tag{background:var(--amber);color:#3A2A00}
   .q-fill .q-tag{background:var(--ok-tint);color:var(--ok)}
-  .q-card.q-need{border-color:var(--ng);border-left-color:var(--ng);box-shadow:0 0 0 2px var(--ng-tint)}
+  .q-card.q-need{border-color:var(--ng);box-shadow:0 0 0 2px var(--ng-tint)}
+  .q-card.q-plain .q-tag{display:none}
   .q-card.q-need .q-tag{background:var(--ng);color:#fff}
   .q-lab{font-size:14px;font-weight:700;color:var(--sub);margin:0 0 8px;letter-spacing:.03em}
   .q-book{font-size:16px;line-height:1.55}
@@ -46,7 +46,8 @@
   .q-opts.q-two .q-opt{flex:1 1 0;justify-content:center;text-align:center}
   .q-opt{appearance:none;display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;font-size:17px;font-weight:800;line-height:1.3;
     padding:14px 12px;border-radius:12px;border:2px solid var(--navy);background:var(--paper);color:var(--navy)}
-  .q-opt .q-ic{font-size:21px;flex:0 0 auto}
+  .q-opt .q-tx{display:flex;flex-direction:column;gap:2px}
+  .q-opt .q-sub{font-size:14px;font-weight:600;opacity:.8}
   .q-opts.q-two .q-opt{font-size:19px}
   .q-opt.q-on{background:var(--navy);color:#fff}
   .q-opt.q-on::after{content:"✓";margin-left:auto;font-size:20px;font-weight:800}
@@ -60,8 +61,8 @@
   /* お酒の確認。2つを離して置く。「飲みました」は赤い枠 */
   .q-alc{display:flex;gap:12px;align-items:stretch}
   .q-alc button{appearance:none;font:inherit;font-weight:800;border-radius:12px;padding:14px 8px;line-height:1.3;background:var(--paper)}
-  #aNo{flex:1.6 1 0;font-size:18px;border:2px solid var(--ok);color:var(--ok)}
-  #aYes{flex:1 1 0;font-size:15px;border:2px solid var(--ng);color:var(--ng)}
+  #aNo{flex:1 1 0;font-size:18px;border:2px solid var(--ok);color:var(--ok)}
+  #aYes{flex:1 1 0;font-size:18px;border:2px solid var(--ng);color:var(--ng)}
   #aNo.q-on{background:var(--ok);color:#fff}
   #aYes.q-on{background:var(--ng);color:#fff}
   .q-names{display:flex;flex-wrap:wrap;gap:8px}
@@ -89,9 +90,8 @@
   /* 下に固定する帯（記録するボタン） */
   .q-bar{position:sticky;bottom:0;background:var(--ground);margin:0 -16px;padding:10px 16px 12px;border-top:1px solid var(--line);z-index:5}
   .q-left{font-size:14px;font-weight:700;color:var(--sub);text-align:center;margin-bottom:7px;line-height:1.4}
-  .q-left.q-todo{font-size:15px;color:#3A2A00;background:#FFE9A8;border:1px solid var(--amber);border-radius:10px;padding:8px 10px}
+  .q-left.q-todo{font-size:15px;color:var(--warn)}
   .q-go{appearance:none;border:0;border-radius:14px;background:var(--navy);color:#fff;font:inherit;font-size:20px;font-weight:800;padding:16px 12px;width:100%;line-height:1.3}
-  .q-go.q-wait{background:#9AA7B4}
   .q-go:disabled{opacity:.55}
   .q-msg{border-radius:12px;padding:12px 14px;font-size:16px;line-height:1.55;font-weight:600;white-space:pre-line;margin-bottom:8px;max-height:230px;overflow:auto}
   .q-msg.q-ok{background:var(--ok-tint);color:var(--ok);border:1px solid #BFE0CC}
@@ -126,8 +126,8 @@
           <div id="startBox">
             <p class="q-lab">乗る前</p>
             <div class="q-opts">
-              <button type="button" class="q-opt" id="tStart"><span class="q-ic">🚗</span><span id="tStartText">今日の出発</span></button>
-              <button type="button" class="q-opt q-minor" id="tOther" hidden><span class="q-ic">🚙</span><span>別の用事で乗る（車は会社に戻っていた）</span></button>
+              <button type="button" class="q-opt" id="tStart"><span id="tStartText">今日の出発</span></button>
+              <button type="button" class="q-opt q-minor" id="tOther" hidden><span class="q-tx"><span>別の用事で乗る</span><span class="q-sub">車は会社に戻っていた</span></span></button>
               <div class="q-note" id="otherNote" hidden></div>
             </div>
           </div>
@@ -135,10 +135,10 @@
           <div id="endBox">
             <p class="q-lab">運転を終えたとき</p>
             <div class="q-opts">
-              <button type="button" class="q-opt" id="tInn"><span class="q-ic">🛏️</span><span>宿に着いた（明日もこの車で動く）</span></button>
-              <button type="button" class="q-opt" id="tStay"><span class="q-ic">🏢</span><span>会社に戻った（明日もこの車で出る）</span></button>
+              <button type="button" class="q-opt" id="tInn"><span class="q-tx"><span>宿に着いた</span><span class="q-sub">明日もこの車で動く</span></span></button>
+              <button type="button" class="q-opt" id="tStay"><span class="q-tx"><span>会社に戻った</span><span class="q-sub">明日もこの車で出る</span></span></button>
               <div class="q-sep"></div>
-              <button type="button" class="q-opt q-minor" id="tBack"><span class="q-ic">🔑</span><span>出張が終わって、車を返した（予約はここで終わり）</span></button>
+              <button type="button" class="q-opt q-minor" id="tBack"><span class="q-tx"><span>出張が終わって、車を返した</span><span class="q-sub">予約はここで終わり</span></span></button>
               <div class="q-note" id="backNote"></div>
             </div>
             <button type="button" class="q-link" id="startLink" hidden>これから乗るときは、こちら（今日の出発）</button>
@@ -196,7 +196,7 @@
   <div id="doneBox" hidden>
     <div class="q-wrap" style="padding:0;gap:12px">
       <div class="q-done">
-        <div class="q-big" id="doneBig">✅ 記録しました</div>
+        <div class="q-big" id="doneBig">記録しました</div>
         <div class="q-text" id="doneText"></div>
         <div class="q-close">この画面は閉じて大丈夫です。</div>
       </div>
@@ -222,6 +222,7 @@
   var startable = false; // 今日の出発がまだ入っていない
   var endOpen = true;    // 「運転を終えたとき」の3つを開いているか
   var touched = false;   // もう何か操作したか（遅れて届いた予約の情報で画面を変えない）
+  var kindPicked = false; // 出発・終わり方を本人が選んだか（自動で選んだものに「入力済み」を出さない）
   var saved = '';
   try { saved = localStorage.getItem('hq_name') || ''; } catch (e) { saved = ''; }
   name = saved;
@@ -236,8 +237,14 @@
   function on(id, yes) { var e = $(id); e.className = e.className.replace(/\s*q-on/g, '') + (yes ? ' q-on' : ''); e.setAttribute('aria-pressed', yes ? 'true' : 'false'); }
   function odoNum() { return Number(($('odo').value || '').replace(/[^0-9]/g, '')) || 0; }
 
+  // 車の名前の表記をそろえる（全角の英数字・かっこの中の空白。サーバーの webCarName_ と同じ）
+  function carName(s) {
+    return String(s || '').replace(/[！-～]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
+      .replace(/　/g, ' ').replace(/\[\s+/g, '[').replace(/\s+\]/g, ']').replace(/([^\s])\[/g, '$1 [').replace(/\s{2,}/g, ' ').trim();
+  }
   // 車名のナンバーを大きく出す（[11-60] と [11-61] のように1文字違いの車がある）
   function drawCar(nm) {
+    nm = carName(nm);
     var box = $('car'); box.innerHTML = '';
     var m = String(nm || '').match(/^(.*?)\s*\[\s*([^\]]+?)\s*\]\s*$/);
     box.appendChild(el('span', '', m ? m[1] : nm));
@@ -256,7 +263,7 @@
       $('moreEnd').textContent = dayDone() ? '今日の記録を直すときは、こちら' : '運転を終えたときは、こちら';
       $('endBox').hidden = !endOpen;
       // 予約に入っていない人: 「この出張の続き」（予約は残り、乗る人に加わる）か「別の用事」（出張は会社に戻っていたものとして締まる）を選ぶ
-      $('tStartText').textContent = notRider ? '今日の出発（この出張の続きで乗る）' : '今日の出発';
+      $('tStartText').textContent = notRider ? '今日の出発（出張の続き）' : '今日の出発';
       $('tOther').hidden = !notRider; $('otherNote').hidden = !notRider;
       on('tStart', kind === 'daystart');
       on('tOther', kind === 'depart');
@@ -281,7 +288,7 @@
       if (notRider && !kind) t = '予約に入っていない方です。この出張の続きで乗るなら「今日の出発」、運転を終えたときは終わり方を選んでください。';
       else if (notRider && kind === 'depart') t = '別の用事として記録します。もとの出張の予約は、ここで終わります。';
       else if (isStart(kind)) t = '乗る前に：お酒の確認 → メーター → 記録する';
-      else if (kind === 'dayend') t = '今日の終わりのメーターを入れて、記録してください。予約はそのまま残ります。';
+      else if (kind === 'dayend') t = '今日の運転の終わりのメーターを入れてください。予約はそのまま残ります。';
       else if (kind === 'return') t = '車を返すときの記録です。このあとの予約は空きます。';
       else if (dayDone()) t = '';
       else t = '運転を終えたら、終わり方を1つ選んでください。';
@@ -338,7 +345,7 @@
     if (isStart(kind) && alc === 'ng') return '飲酒を申告する（運転しません）';
     if (kind === 'depart') return '出発を記録する';
     if (kind === 'daystart') return '今日の出発を記録する';
-    if (kind === 'dayend') return '今日の終わりを記録する';
+    if (kind === 'dayend') return '運転の終わりを記録する';
     if (kind === 'return') return mode === 'trip' ? '車を返したことを記録する' : '帰着を記録する';
     return '記録する';
   }
@@ -353,12 +360,12 @@
     ['kindCard', 'alcCard', 'nameCard', 'meterCard'].forEach(function (id) {
       var c = $(id), t = c.querySelector('.q-tag');
       if (!t) { t = el('span', 'q-tag', ''); c.insertBefore(t, c.firstChild); }
-      c.className = 'q-card q-st ' + (miss[id] ? 'q-todo' : 'q-fill');
+      c.className = 'q-card q-st ' + (miss[id] ? 'q-todo' : 'q-fill') + (id === 'kindCard' && !miss[id] && !kindPicked ? ' q-plain' : '');
       t.textContent = miss[id] ? '未入力' : '✓ 入力済み';
     });
     $('go').textContent = goLabel();
     $('go').className = 'q-go' + (m.length ? ' q-wait' : '');
-    $('left').textContent = m.length ? '⚠ ' + leftText(m) : 'いまの時刻（' + clock() + '）で記録します';
+    $('left').textContent = m.length ? leftText(m) : 'いまの時刻（' + clock() + '）で記録します';
     $('left').className = 'q-left' + (m.length ? ' q-todo' : '');
     $('left').hidden = false;
   }
@@ -452,7 +459,7 @@
     var box = $('book'); box.innerHTML = '';
     if (!s || !s.ok) { box.appendChild(el('span', '', (s && s.error) || 'このQRは使えません。')); $('form').hidden = true; return; }
     drawCar(s.car.name);
-    document.title = s.car.name + '｜社用車の記録';
+    document.title = carName(s.car.name) + '｜社用車の記録';
     mode = s.kind === 'midtrip' ? 'trip' : 'normal';
     var dd = s.day || {};
     if (s.booking) {
@@ -468,7 +475,7 @@
         ? 'この車は予約なしで使います。行き先だけ教えてください。'
         : 'このまま記録すると「予約なし」で入り、配車担当に知らせます。'));
     }
-    if (mode === 'trip' && dd.done) box.appendChild(el('div', 'q-donebox', '✅ 今日の終わりは記録済みです（' + fmt(dd.odoEnd) + ' km）。直すときだけ、もう一度入れてください。'));
+    if (mode === 'trip' && dd.done) box.appendChild(el('div', 'q-donebox', '今日の運転の終わりは記録済みです（' + fmt(dd.odoEnd) + ' km）。直すときだけ、もう一度入れてください。'));
     var g = el('div', 'q-guide', ''); g.id = 'guide'; g.hidden = true; box.appendChild(g);
 
     // この車の最近の記録（もう誰かが入れたか・誰の車かが分かるように。2026-10-25）。たたんで下に置く
@@ -520,7 +527,7 @@
   // 読み込みが済むまでボタンは出さない（途中でボタンが入れ替わって押し間違えるのを防ぐ）。10秒たっても来なければ入力だけ開く
   if ((C && K) || DEMO) setTimeout(function () { fallback('予約の確認に時間がかかっています。入力はそのまま続けられます。'); }, 10000);
 
-  function choose(k, s) { touched = true; $('msg').hidden = true; setKind(k, s); }
+  function choose(k, s) { touched = true; kindPicked = true; $('msg').hidden = true; setKind(k, s); }
   $('tDep').onclick = function () { choose('depart'); };
   $('tRet').onclick = function () { choose('return'); };
   $('tStart').onclick = function () { choose('daystart'); };
@@ -540,7 +547,7 @@
   var undoToken = '', undoTimer = null;
   function showDone(r) {
     $('form').hidden = true; $('foot').hidden = true; $('doneBox').hidden = false;
-    $('doneBig').textContent = r.kind === 'alcohol' ? '申告を受けました' : '✅ 記録しました';
+    $('doneBig').textContent = r.kind === 'alcohol' ? '申告を受けました' : '記録しました';
     $('doneText').textContent = r.message || '';
     undoToken = r.undo || ''; $('undo').hidden = !undoToken; $('undo').disabled = false;
     if (undoTimer) clearTimeout(undoTimer);
@@ -548,7 +555,7 @@
     window.scrollTo(0, 0);
   }
   function reset() {
-    sending = false; touched = false; state = null; confirmFor = ''; dest = '';
+    sending = false; touched = false; kindPicked = false; state = null; confirmFor = ''; dest = '';
     $('odo').value = ''; $('msg').hidden = true; $('go').disabled = false;
     $('doneBox').hidden = true; $('foot').hidden = false;
     $('book').innerHTML = ''; $('book').appendChild(el('span', 'q-muted', 'この車の予約を確認しています…'));
